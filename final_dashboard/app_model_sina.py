@@ -1,0 +1,815 @@
+import os
+import time
+import json
+import logging
+import threading
+import cv2
+import numpy as np
+import pandas as pd
+import gradio as gr
+from ultralytics import YOLO
+import Arduino
+
+
+CONVEYOR_DIRECTION = "DOWNWARD"
+
+
+# Disable Gradio analytics
+os.environ["GRADIO_ANALYTICS_ENABLED"] = "False"
+
+# Logging configuration
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
+# 1. Startup paths verification
+MODEL_PATH = "model_path"
+DATA_YAML_PATH = "data.yaml path"  # for validating model accuracy on dashboard
+
+if not os.path.exists(MODEL_PATH):
+    logging.warning(f"⚠️ Model file not found at '{MODEL_PATH}'. Ensure correct path before running detection.")
+
+# 2. Hardware connection
+arduino, status_msg = Arduino.connect()
+
+# 3. Model & CLAHE setup
+model = YOLO(MODEL_PATH) if os.path.exists(MODEL_PATH) else None
+clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+
+
+
+_CV_MAJOR, _CV_MINOR = map(int, cv2.__version__.split(".")[:2])
+USES_LEGACY_ANGLE_CONVENTION = (_CV_MAJOR, _CV_MINOR) < (4, 5)
+logging.info(
+    f"OpenCV version detected: {cv2.__version__} -> "
+    f"{'legacy' if USES_LEGACY_ANGLE_CONVENTION else 'modern'} minAreaRect angle convention in use."
+)
+
+# 18-Class mapping
+CLASS_MAPPING = {
+    "Aluminium foil": "Aluminium foil",
+    "Bottle cap": "Bottle cap",
+    "Bottle": "Bottle",
+    "Broken glass": "Broken glass",
+    "Can": "Can",
+    "Carton": "Carton",
+    "Cigarette": "Cigarette",
+    "Cup": "Cup",
+    "Lid": "Lid",
+    "Other litter": "Other litter",
+    "Other plastic": "Other plastic",
+    "Paper": "Paper",
+    "Plastic bag - wrapper": "Plastic bag - wrapper",
+    "Plastic container": "Plastic container",
+    "Pop tab": "Pop tab",
+    "Straw": "Straw",
+    "Styrofoam piece": "Styrofoam piece",
+    "Unlabeled litter": "Unlabeled litter",
+}
+
+ENVIRONMENTAL_PRIORITY = {
+    "Can": 1, "Aluminium foil": 2, "Pop tab": 3, "Bottle": 4,
+    "Plastic container": 5, "Bottle cap": 6, "Lid": 7, "Other plastic": 8,
+    "Plastic bag - wrapper": 9, "Straw": 10, "Styrofoam piece": 11,
+    "Broken glass": 12, "Carton": 13, "Paper": 14, "Cup": 15,
+    "Cigarette": 16, "Other litter": 17, "Unlabeled litter": 18,
+}
+
+
+# WASTE_VALUES (USD)
+WASTE_VALUES = {
+    "Can": 0.10, "Aluminium foil": 0.05, "Pop tab": 0.02, "Bottle": 0.08,
+    "Plastic container": 0.06, "Bottle cap": 0.01, "Lid": 0.01, "Other plastic": 0.03,
+    "Plastic bag - wrapper": 0.01, "Straw": 0.005, "Styrofoam piece": 0.01,
+    "Broken glass": 0.04, "Carton": 0.03, "Paper": 0.02, "Cup": 0.02,
+    "Cigarette": 0.00, "Other litter": 0.00, "Unlabeled litter": 0.00,
+}
+
+BIN_CAPACITIES = {k: 5 for k in CLASS_MAPPING.keys()}
+
+TRIGGER_LINE_RATIO = 0.50
+TRIGGER_TOLERANCE = 25
+SCALE_FACTOR_MM = 1.5
+GRASPING_ZONE_Y_MM = 600.0
+CONVEYOR_SPEED_MM_S = 150.0
+
+# For Calculate Availability
+PLANNED_PRODUCTION_TIME = 3600.0  # 3600(Second) == 1H
+
+
+
+# For Calculate Performance
+"""
+The shortest possible time for a robot to process and separate
+a piece of waste in seconds (here 0.5 seconds, or the ideal speed
+of 2 pieces of waste per second).
+"""
+IDEAL_CYCLE_TIME = 0.5
+
+# Thread synchronization
+state_lock = threading.Lock()
+
+# Global state
+is_emergency_stopped = False
+total_downtime = 0.0 #Total stop times
+downtime_start_marker = None # Stop start time marker
+is_conveyor_halted = False
+
+track_last_seen = {} # Memory management (Garbage Collection) and cleaning up old identifiers.
+
+processed_track_ids = set() # Prevent the robot from issuing repeated commands for a specific waste.
+
+prev_frame_time = time.time() # For Calculate FPS
+
+start_time = time.time()
+
+system_metrics = {
+    "total_count": 0,
+    "confidence_sum": 0.0,
+    "total_revenue": 0.0,
+}
+
+for k in CLASS_MAPPING.keys():  # Add All CLASS_MAPPING Values in system_metrics
+    system_metrics[k] = 0
+
+
+bin_fill_level = {k: 0 for k in CLASS_MAPPING.keys()}
+sorting_timestamps = []
+log_history = []
+time_series_data = {"Time": [0], "Total Sorted": [0]}
+
+
+def send_serial_cmd(command_payload: str):
+    global arduino
+    if arduino and hasattr(arduino, "is_open") and arduino.is_open:
+        try:
+            arduino.write(f"{command_payload}\n".encode('utf-8'))
+            return True
+        except Exception as e:
+            logging.error(f"Serial transmission error: {e}")
+    return False
+
+
+def extract_object_orientation(frame: np.ndarray, bbox: tuple) -> float:
+    """
+    Estimate object rotation angle from a CLEAN (undrawn) frame.
+    """
+    x1, y1, x2, y2 = bbox
+    h_img, w_img = frame.shape[:2]
+
+    x1, y1 = max(0, x1), max(0, y1)
+    x2, y2 = min(w_img, x2), min(h_img, y2)
+
+    roi = frame[y1:y2, x1:x2]
+    if roi.size == 0:
+        return 0.0
+
+    gray = cv2.cvtColor(roi, cv2.COLOR_RGB2GRAY)
+    blur = cv2.GaussianBlur(gray, (5, 5), 0)
+
+    _, thresh = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    if not contours: # Supporter For contours
+        edges = cv2.Canny(blur, 50, 150)
+        contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    if contours:
+        c = max(contours, key=cv2.contourArea)
+        if cv2.contourArea(c) > 20:
+            rect = cv2.minAreaRect(c)
+            angle = rect[-1]
+           
+            if USES_LEGACY_ANGLE_CONVENTION and angle < -45:
+                angle += 90.0
+            return float(angle)
+
+    return 0.0
+
+
+def cleanup_tracking_memory(current_time: float, max_age_seconds: float = 30.0):
+    global processed_track_ids, track_last_seen
+    expired_ids = [tid for tid, last_seen in track_last_seen.items() if current_time - last_seen > max_age_seconds]
+    for tid in expired_ids:
+        processed_track_ids.discard(tid)
+        del track_last_seen[tid]
+
+
+
+
+def calculate_kinematics_and_send(obj, frame, frame_width, frame_height):
+
+    cx, cy = obj["center_x"], obj["center_y"]
+
+  
+
+
+    xw_mm = (cx - (frame_width / 2)) * SCALE_FACTOR_MM
+    zw_mm = -150.0
+
+
+    trigger_y_px = int(frame_height * TRIGGER_LINE_RATIO)
+    
+    if CONVEYOR_DIRECTION == "UPWARD":
+   
+        delta_y_px = trigger_y_px - cy
+    else:
+       
+        delta_y_px = cy - trigger_y_px
+    delta_y_mm = delta_y_px * SCALE_FACTOR_MM
+
+
+    dist_to_grab_mm = GRASPING_ZONE_Y_MM - delta_y_mm
+
+
+    if CONVEYOR_SPEED_MM_S > 0:
+        time_to_grab_ms = int((dist_to_grab_mm / CONVEYOR_SPEED_MM_S) * 1000)
+    else:
+        time_to_grab_ms = 0
+
+
+    angle_deg = extract_object_orientation(frame, obj["bbox"])
+
+
+    payload = {
+        "cmd": "PICK",
+        "cls": obj["class"],
+        "x": round(xw_mm, 2),
+        "y": round(dist_to_grab_mm, 2),  
+        "z": zw_mm,
+        "theta": round(angle_deg, 2),
+        "ttg_ms": time_to_grab_ms,
+        "ts": int(time.time())
+    }
+    
+    payload_json = json.dumps(payload)
+
+
+
+    if time_to_grab_ms >= 0:
+        send_serial_cmd(payload_json)
+
+    timestamp = time.strftime("%H:%M:%S")
+    formatted_payload_display = (
+        "==================================================\n"
+        f"[{timestamp}] 📡 TRANSMITTING TO ROBOT ARM\n"
+        "--------------------------------------------------\n"
+        f"• Target Class      : {obj['class']} (ID: {obj['track_id']})\n"
+        f"• Image Center (px): X={cx}, Y={cy}\n"
+        f"• Trigger Line (px): Y={trigger_y_px}\n"
+        f"• World Coords (mm): Xw={xw_mm:+.1f}, Remaining Dist={dist_to_grab_mm:.1f}mm\n"
+        f"• Real Angle (deg) : {angle_deg:.1f}°\n"
+        f"• Time-to-Grab (ms): {time_to_grab_ms} ms\n"
+        "--------------------------------------------------\n"
+        f'Payload Sent: {payload_json}\n'
+        "=================================================="
+    )
+    return formatted_payload_display, payload_json
+
+
+
+
+
+def get_current_rates_df():
+    total = system_metrics["total_count"]
+    categories = list(CLASS_MAPPING.keys())
+    return pd.DataFrame({
+        "Waste Category": categories,
+        "Sorted Count (Total)": [system_metrics[k] for k in categories],
+        "Share (%)": [f"{(system_metrics[k]/total)*100:.1f}%" if total > 0 else "0%" for k in categories],
+        "Bin Fill Status": [f"{bin_fill_level[k]}/{BIN_CAPACITIES[k]}" for k in categories],
+    })
+
+
+def check_and_update_conveyor_status():
+    global is_conveyor_halted, downtime_start_marker, total_downtime, log_history
+
+    if is_emergency_stopped:
+        return
+
+    full_bins = [k for k, capacity in BIN_CAPACITIES.items() if bin_fill_level[k] >= capacity]
+
+    if full_bins and not is_conveyor_halted:
+        is_conveyor_halted = True
+        downtime_start_marker = time.time()
+        send_serial_cmd(json.dumps({"cmd": "STOP_CONVEYOR", "reason": f"BIN_FULL_{full_bins[0]}"}))
+        timestamp = time.strftime("%H:%M:%S")
+        log_msg = f"[{timestamp}] 🚨 SYSTEM HALTED: Bin [{full_bins[0]}] is FULL! Conveyor Stopped."
+        if log_msg not in log_history[:3]:
+            log_history.insert(0, log_msg)
+            log_history = log_history[:50]
+
+    elif not full_bins and is_conveyor_halted:
+        is_conveyor_halted = False
+        if downtime_start_marker:
+            total_downtime += (time.time() - downtime_start_marker)
+            downtime_start_marker = None
+        send_serial_cmd(json.dumps({"cmd": "START_CONVEYOR"}))
+        timestamp = time.strftime("%H:%M:%S")
+        log_msg = f"[{timestamp}] ▶️ SYSTEM RESUMED: Full bins cleared. Conveyor restarted."
+        log_history.insert(0, log_msg)
+        log_history = log_history[:50]
+
+
+def advanced_robot_logic(detected_objects, frame, frame_width, frame_height):
+ 
+    global processed_track_ids, log_history, is_conveyor_halted, is_emergency_stopped
+
+    if is_emergency_stopped:
+        return None, "🚨 emergency stop active: Operations halted.", "🚨 HARDWARE LOCK (e-stop)"
+
+    if is_conveyor_halted:
+        return None, "🚨 CONVEYOR HALTED: Waiting for bin evacuation.", "CONVEYOR STOPPED (HARDWARE LOCK)"
+
+    if not detected_objects:
+        return None, "Conveyor belt is empty in this frame.", "Waiting for object..."
+
+    trigger_y = int(frame_height * TRIGGER_LINE_RATIO)
+    valid_objects = []
+
+    for obj in detected_objects:
+        center_y = obj["center_y"]
+        track_id = obj["track_id"]
+        if abs(center_y - trigger_y) <= TRIGGER_TOLERANCE and track_id not in processed_track_ids:
+            valid_objects.append(obj)
+
+    if not valid_objects:
+        return None, "Monitoring conveyor belt (Waiting for new item)...", "Waiting for object on Trigger Line..."
+
+    sorted_queue = sorted(
+        valid_objects,
+        key=lambda x: (ENVIRONMENTAL_PRIORITY.get(x["class"], 99), -x["confidence"]),
+    ) # Two_Step_Verification Filter For Final_Output
+
+    target_object = sorted_queue[0]
+
+    processed_track_ids.add(target_object["track_id"])
+    timestamp = time.strftime("%H:%M:%S")
+
+    payload_display, _ = calculate_kinematics_and_send(target_object, frame, frame_width, frame_height)
+    print(payload_display)
+
+    log_msg = (
+        f"[{timestamp}] 🤖 COMMAND: Sort [{target_object['class']}] (ID: {target_object['track_id']})"
+        f" ({target_object['confidence']:.1%}) | Center: ({target_object['center_x']}, {target_object['center_y']})"
+    )
+
+    return target_object, log_msg, payload_display
+
+
+def process_single_frame(frame):
+    global log_history, prev_frame_time, processed_track_ids, track_last_seen, total_downtime, bin_fill_level, is_emergency_stopped
+
+    df_rates = get_current_rates_df()
+    df_chart = pd.DataFrame(time_series_data)
+
+    if is_emergency_stopped:
+        display_frame = np.array(frame) if frame is not None else np.zeros((480, 640, 3), dtype=np.uint8)
+        cv2.putText(display_frame, "EMERGENCY STOPPED", (50, 240), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255, 0, 0), 3)
+        return (
+            display_frame, "0 FPS", "0.0%", "0 WPM", "EMERGENCY STOP", "$0.00",
+            df_rates, "\n".join(log_history[:8]), "🚨 hardware & processing halted via e-stop", df_chart
+        )
+
+    if frame is None or model is None:
+        status_txt = "⚠️ Model file missing!" if model is None else "No Frame Input"
+        empty_frame = np.zeros((480, 640, 3), dtype=np.uint8)
+        return empty_frame, "0 FPS", "0.0%", "0 WPM", "0.0%", "$0.00", df_rates, status_txt, "Waiting...", df_chart
+
+    current_time = time.time()
+    cleanup_tracking_memory(current_time)
+
+    fps = 1.0 / (current_time - prev_frame_time) if (current_time - prev_frame_time) > 0 else 0.0
+    prev_frame_time = current_time
+    fps_display = f"{int(fps)} FPS"
+
+    enhanced_frame = np.array(frame)
+    frame_h, frame_w, _ = enhanced_frame.shape
+    trigger_y = int(frame_h * TRIGGER_LINE_RATIO)
+
+    results = model.track(
+        enhanced_frame, imgsz=416, conf=0.50, iou=0.45, persist=True, tracker="bytetrack.yaml", verbose=False
+    )[0]
+
+
+    clean_frame_for_analysis = enhanced_frame.copy()
+
+    detected_batch = []
+    if results.boxes is not None and results.boxes.id is not None:
+        boxes = results.boxes.xyxy.cpu().numpy()
+        track_ids = results.boxes.id.int().cpu().numpy()
+        cls_ids = results.boxes.cls.int().cpu().numpy()
+        confs = results.boxes.conf.cpu().numpy()
+
+        for box, track_id, cls_id, conf in zip(boxes, track_ids, cls_ids, confs):
+            raw_class_name = model.names[cls_id]
+            if raw_class_name in CLASS_MAPPING:
+                mapped_class = CLASS_MAPPING[raw_class_name]
+                x1, y1, x2, y2 = map(int, box)
+                cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
+
+                track_last_seen[int(track_id)] = current_time
+
+                detected_batch.append({
+                    "track_id": int(track_id),
+                    "class": mapped_class,
+                    "confidence": float(conf),
+                    "bbox": (x1, y1, x2, y2),
+                    "center_x": cx,
+                    "center_y": cy,
+                })
+
+                # These overlays are drawn ONLY on enhanced_frame (the display
+                # copy). clean_frame_for_analysis remains untouched.
+                cv2.rectangle(enhanced_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                cv2.circle(enhanced_frame, (cx, cy), 4, (255, 0, 0), -1)
+                cv2.putText(
+                    enhanced_frame, f"ID:{track_id} {mapped_class} {conf:.1%}",
+                    (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2
+                )
+
+    with state_lock:
+        check_and_update_conveyor_status()
+        target, control_log, payload_display = advanced_robot_logic(
+            detected_batch, clean_frame_for_analysis, frame_w, frame_h
+        )
+
+        if target:
+            cls_target = target["class"]
+            system_metrics[cls_target] += 1
+            system_metrics["total_count"] += 1
+            system_metrics["confidence_sum"] += target["confidence"]
+            system_metrics["total_revenue"] += WASTE_VALUES.get(cls_target, 0.0)
+
+            bin_fill_level[cls_target] += 1
+
+            sorting_timestamps.append(current_time)
+            log_history.insert(0, control_log)
+            log_history = log_history[:50]
+
+    line_color = (255, 0, 0) if is_conveyor_halted else ((0, 255, 0) if target else (255, 255, 0))
+    cv2.line(enhanced_frame, (0, trigger_y), (frame_w, trigger_y), line_color, 2)
+    cv2.putText(enhanced_frame, "TRIGGER LINE", (10, trigger_y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, line_color, 1)
+
+    if is_conveyor_halted:
+        cv2.putText(enhanced_frame, "CONVEYOR HALTED", (frame_w // 4, frame_h // 2), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255, 0, 0), 3)
+
+    cv2.putText(enhanced_frame, f"FPS: {int(fps)}", (15, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+
+    total = system_metrics["total_count"]
+    df_rates = get_current_rates_df()
+
+    sorting_timestamps[:] = [t for t in sorting_timestamps if current_time - t <= 60]
+    wpm_speed = f"{len(sorting_timestamps)} WPM"
+
+    avg_conf_raw = (system_metrics["confidence_sum"] / total) if total > 0 else 0.0
+    avg_conf = f"{avg_conf_raw * 100:.1f}%"
+
+    current_dt = total_downtime + ((current_time - downtime_start_marker) if downtime_start_marker else 0.0)
+    operating_time = max(0.001, current_time - start_time - current_dt)
+
+    availability = min(1.0, operating_time / PLANNED_PRODUCTION_TIME)
+    performance = min(1.0, (IDEAL_CYCLE_TIME * total) / operating_time) if operating_time > 0 else 0.0
+    quality = avg_conf_raw if total > 0 else 1.0
+
+    oee_score = (availability * performance * quality) * 100.0
+    oee_display = f"{oee_score:.1f}% (DT: {int(current_dt)}s)"
+
+    revenue_display = f"${system_metrics['total_revenue']:.2f}"
+
+    elapsed_time = int(current_time - start_time)
+    if not time_series_data["Time"] or elapsed_time != time_series_data["Time"][-1]:
+        time_series_data["Time"].append(elapsed_time)
+        time_series_data["Total Sorted"].append(total)
+        if len(time_series_data["Time"]) > 60:
+            time_series_data["Time"].pop(0)
+            time_series_data["Total Sorted"].pop(0)
+
+    df_chart = pd.DataFrame(time_series_data)
+    logs_display = "\n".join(log_history[:8])
+
+    return (
+        enhanced_frame,
+        fps_display,
+        avg_conf,
+        wpm_speed,
+        oee_display,
+        revenue_display,
+        df_rates,
+        logs_display,
+        payload_display,
+        df_chart,
+    )
+
+
+# --- E-Stop & State Handlers ---
+def trigger_emergency_stop():
+    global is_emergency_stopped, is_conveyor_halted, downtime_start_marker, log_history
+
+    with state_lock:
+        is_emergency_stopped = True
+        if not is_conveyor_halted:
+            is_conveyor_halted = True
+        if not downtime_start_marker:
+            downtime_start_marker = time.time()
+
+    send_serial_cmd(json.dumps({"cmd": "EMERGENCY_STOP", "reason": "OPERATOR_E_STOP"}))
+
+    timestamp = time.strftime("%H:%M:%S")
+    log_msg = f"[{timestamp}] 🚨🚨 emergency stop activated by operator! All Operations Halted."
+    log_history.insert(0, log_msg)
+    log_history = log_history[:50]
+
+    df_rates = get_current_rates_df()
+    df_chart = pd.DataFrame(time_series_data)
+    empty_frame = np.zeros((480, 640, 3), dtype=np.uint8)
+    cv2.putText(empty_frame, "EMERGENCY STOPPED", (50, 240), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255, 0, 0), 3)
+
+    return (
+        empty_frame, "0 FPS", "0.0%", "0 WPM", "emergency stop", f"${system_metrics['total_revenue']:.2f}",
+        df_rates, "\n".join(log_history[:8]), "🚨 HARDWARE & PROCESSING HALTED VIA E-STOP", df_chart
+    )
+
+
+def release_emergency_stop():
+    global is_emergency_stopped, log_history
+
+    with state_lock:
+        is_emergency_stopped = False
+        timestamp = time.strftime("%H:%M:%S")
+        log_history.insert(0, f"[{timestamp}] ✅ EMERGENCY STOP RELEASED: Re-evaluating bin status...")
+        log_history = log_history[:50]
+        check_and_update_conveyor_status()
+
+    if is_conveyor_halted:
+        status_msg_txt = "⚠️ E-Stop released, but a bin is still full — conveyor remains halted."
+    else:
+        status_msg_txt = "✅ System fully resumed."
+
+    df_rates = get_current_rates_df()
+    return "\n".join(log_history[:8]), status_msg_txt, df_rates
+
+
+def empty_selected_bin(bin_name):
+    global bin_fill_level, log_history
+
+    if not bin_name or bin_name not in BIN_CAPACITIES:
+        return get_current_rates_df(), "\n".join(log_history[:8])
+
+    with state_lock:
+        bin_fill_level[bin_name] = 0
+
+        timestamp = time.strftime("%H:%M:%S")
+        log_msg = f"[{timestamp}] 🗑️ OPERATOR ACTION: Bin [{bin_name}] physically emptied. Total metrics preserved."
+        log_history.insert(0, log_msg)
+        log_history = log_history[:50]
+
+        check_and_update_conveyor_status()
+
+    return get_current_rates_df(), "\n".join(log_history[:8])
+
+
+def evaluate_model_benchmark():
+    if not os.path.exists(DATA_YAML_PATH):
+        return f"⚠️ **Benchmark Unavailable**: '{DATA_YAML_PATH}' not found in root directory."
+    if model is None:
+        return f"⚠️ **Benchmark Unavailable**: Model weights not loaded from '{MODEL_PATH}'."
+
+    try:
+        metrics = model.val(data=DATA_YAML_PATH, verbose=False)
+        map50 = metrics.box.map50
+        precision = metrics.box.mp
+        recall = metrics.box.mr
+        return (
+            f"📊 **Offline Model Benchmarks (Validation Set)**:\n"
+            f"• **mAP@50**: {map50:.3f}\n"
+            f"• **Precision**: {precision:.3f}\n"
+            f"• **Recall**: {recall:.3f}\n"
+            f"* Note: Video streaming paused temporarily during benchmark evaluation."
+        )
+    except Exception as e:
+        return f"⚠️ Benchmark Error: {str(e)}"
+
+
+def handle_reconnect():
+    global arduino
+    if arduino and hasattr(arduino, "is_open") and arduino.is_open:
+        try:
+            arduino.close()
+        except Exception:
+            pass
+    arduino,new_status = Arduino.connect()
+    return new_status
+
+
+def reset_system_metrics():
+    global system_metrics, bin_fill_level, sorting_timestamps, log_history, time_series_data, start_time, prev_frame_time, processed_track_ids, track_last_seen, total_downtime, downtime_start_marker, is_conveyor_halted, is_emergency_stopped
+
+    with state_lock:
+        system_metrics = {
+            "total_count": 0, "confidence_sum": 0.0, "total_revenue": 0.0,
+        }
+        for k in CLASS_MAPPING.keys():
+            system_metrics[k] = 0
+
+        bin_fill_level = {k: 0 for k in BIN_CAPACITIES}
+
+        prev_frame_time = time.time()
+        total_downtime = 0.0
+        downtime_start_marker = None
+        is_conveyor_halted = False
+        is_emergency_stopped = False
+
+        processed_track_ids.clear()
+        track_last_seen.clear()
+        sorting_timestamps.clear()
+        log_history.clear()
+        time_series_data = {"Time": [0], "Total Sorted": [0]}
+        start_time = time.time()
+
+    reset_log = "🔄 System Metrics, Bin Fill Levels & Downtime Resetted!"
+    log_history.append(reset_log)
+
+    df_rates = get_current_rates_df()
+    empty_frame = np.zeros((480, 640, 3), dtype=np.uint8)
+    return (
+        empty_frame, "0 FPS", "0.0%", "0 WPM", "0.0%", "$0.00", df_rates,
+        reset_log, "Waiting for object on Trigger Line...", pd.DataFrame(time_series_data)
+    )
+
+
+def analyze_uploaded_video(video_path):
+    if not video_path:
+        df_rates = get_current_rates_df()
+        empty_frame = np.zeros((480, 640, 3), dtype=np.uint8)
+        yield empty_frame, "0 FPS", "0.0%", "0 WPM", "0.0%", "$0.00", df_rates, "⚠️ Please upload a video first!", "Waiting...", pd.DataFrame({"Time": [0], "Total Sorted": [0]})
+        return
+
+    cap = cv2.VideoCapture(video_path)
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if not ret:
+            break
+        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        yield process_single_frame(frame_rgb)
+        time.sleep(0.01)
+    cap.release()
+
+
+def toggle_source(mode):
+    if mode == "🎬 Video File":
+        return gr.update(visible=True), gr.update(visible=False), gr.update(visible=True)
+    else:
+        return gr.update(visible=False), gr.update(visible=True), gr.update(visible=False)
+
+
+
+
+
+
+# Gradio GUI Construction
+with gr.Blocks(title="Industrial Smart Waste Sorter System", theme=gr.themes.Soft()) as demo:
+    gr.Markdown("# 🏭 Industrial Smart Waste Sorting Automation System")
+    gr.Markdown("*Notice: Financial values and Bin capacities are demo parameters calibrated for 18 waste categories.*")
+
+    with gr.Row():
+        with gr.Column(scale=2):
+            arduino_status_box = gr.Textbox(
+                label="🔌 Hardware Serial Port Status (Arduino Connection)",
+                value=status_msg,
+                interactive=False,
+            )
+        with gr.Column(scale=1):
+            btn_reconnect = gr.Button("⚡ Reconnect Hardware", variant="primary")
+        with gr.Column(scale=1):
+            btn_estop = gr.Button("🛑 EMERGENCY STOP", variant="stop")
+            btn_release_estop = gr.Button("✅ Resume Operations", variant="secondary")
+
+    with gr.Row():
+        with gr.Column():
+            metric_fps = gr.Textbox(label="⚡ FPS (Processing Speed)", value="0 FPS")
+        with gr.Column():
+            metric_conf = gr.Textbox(label="🎯 Model Accuracy (Quality)", value="0.0%")
+        with gr.Column():
+            metric_speed = gr.Textbox(label="⚡ Real-time Speed (Performance)", value="0 WPM")
+        with gr.Column():
+            metric_oee = gr.Textbox(label="📊 Overall Effectiveness (OEE / Downtime)", value="0.0%")
+        with gr.Column():
+            metric_rev = gr.Textbox(label="💵 Economic Value Generated", value="$0.00")
+
+    with gr.Row():
+        with gr.Column(scale=2):
+            gr.Markdown("### 📷 Live Conveyor Belt Monitoring")
+            source_selector = gr.Radio(
+                choices=["📹 Webcam", "🎬 Video File"],
+                value="🎬 Video File",
+                label="Select Input Stream Source",
+            )
+            input_video = gr.Video(label="Upload Conveyor Video File", visible=True)
+            btn_analyze = gr.Button("▶️ Start Analysis", variant="primary", visible=True)
+
+            input_cam = gr.Image(
+                sources=["webcam"], streaming=True, type="numpy", label="Input Stream", visible=False
+            )
+            output_cam = gr.Image(show_label=False, type="numpy", label="Processed Stream")
+
+        with gr.Column(scale=1):
+            gr.Markdown("### 📈 Bin Capacities & Selective Bin Evacuation")
+            rates_table = gr.Dataframe(value=get_current_rates_df(), interactive=False)
+            gr.Markdown(
+                "💡 *Notice: **Sorted Count (Total)** tracks lifetime sorted items, "
+                "while **Bin Fill Status** represents current physical capacity level.* "
+            )
+
+            with gr.Row():
+                select_bin_dropdown = gr.Dropdown(
+                    choices=list(CLASS_MAPPING.keys()),
+                    label="Select Bin to Clear",
+                    value="Plastic container",
+                )
+                btn_empty_bin = gr.Button("🗑️ Empty Selected Bin", variant="secondary")
+
+            gr.Markdown("### 🤖 Serial Command & Kinematics Payload")
+            kinematics_payload_box = gr.Textbox(
+                lines=9, interactive=False, label="Real-time Kinematics & Serial Command Payload"
+            )
+
+            gr.Markdown("### 🧠 Robot Logic & Controller Logs")
+            control_logs = gr.Textbox(lines=5, interactive=False, label="Priority Event Log")
+
+            btn_eval = gr.Button("📊 Run Offline Model Evaluation (mAP)", variant="secondary")
+            gr.Markdown("*Note: Running benchmark will briefly pause the video stream processing.*")
+            eval_output = gr.Markdown()
+
+            btn_reset = gr.Button("🔄 Reset Metrics & Counters", variant="secondary")
+
+    with gr.Row():
+        live_chart = gr.LinePlot(
+            value=pd.DataFrame(time_series_data),
+            x="Time",
+            y="Total Sorted",
+            title="Total Sorted Waste vs. Elapsed Time (seconds)",
+            x_title="Elapsed Time (Seconds)",
+            y_title="Total Units Sorted",
+        )
+
+    # Event Bindings
+    source_selector.change(
+        fn=toggle_source, inputs=source_selector, outputs=[input_video, input_cam, btn_analyze]
+    )
+
+    input_cam.stream(
+        fn=process_single_frame,
+        inputs=input_cam,
+        outputs=[
+            output_cam, metric_fps, metric_conf, metric_speed, metric_oee,
+            metric_rev, rates_table, control_logs, kinematics_payload_box, live_chart,
+        ],
+        queue=True,
+        show_progress="hidden",
+    )
+
+    btn_analyze.click(
+        fn=analyze_uploaded_video,
+        inputs=input_video,
+        outputs=[
+            output_cam, metric_fps, metric_conf, metric_speed, metric_oee,
+            metric_rev, rates_table, control_logs, kinematics_payload_box, live_chart,
+        ],
+    )
+
+    btn_empty_bin.click(
+        fn=empty_selected_bin,
+        inputs=select_bin_dropdown,
+        outputs=[rates_table, control_logs],
+    )
+
+    btn_eval.click(fn=evaluate_model_benchmark, inputs=None, outputs=eval_output)
+
+    btn_reset.click(
+        fn=reset_system_metrics,
+        inputs=None,
+        outputs=[
+            output_cam, metric_fps, metric_conf, metric_speed, metric_oee, metric_rev,
+            rates_table, control_logs, kinematics_payload_box, live_chart,
+        ],
+    )
+
+    btn_reconnect.click(fn=handle_reconnect, inputs=None, outputs=arduino_status_box)
+
+    btn_estop.click(
+        fn=trigger_emergency_stop,
+        inputs=None,
+        outputs=[
+            output_cam, metric_fps, metric_conf, metric_speed, metric_oee,
+            metric_rev, rates_table, control_logs, kinematics_payload_box, live_chart,
+        ],
+    )
+
+    # Fixed output assignment for Release E-Stop
+    btn_release_estop.click(
+        fn=release_emergency_stop,
+        inputs=None,
+        outputs=[control_logs, arduino_status_box, rates_table],
+    )
+
+if __name__ == "__main__":
+    demo.queue().launch(share=True)
