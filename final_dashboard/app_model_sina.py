@@ -102,7 +102,7 @@ The shortest possible time for a robot to process and separate
 a piece of waste in seconds (here 0.5 seconds, or the ideal speed
 of 2 pieces of waste per second).
 """
-IDEAL_CYCLE_TIME = 0.5
+IDEAL_CYCLE_TIME = 3.0
 
 # Thread synchronization
 state_lock = threading.Lock()
@@ -464,18 +464,32 @@ def process_single_frame(frame):
     avg_conf = f"{avg_conf_raw * 100:.1f}%"
 
     current_dt = total_downtime + ((current_time - downtime_start_marker) if downtime_start_marker else 0.0)
-    operating_time = max(0.001, current_time - start_time - current_dt)
 
-    availability = min(1.0, operating_time / PLANNED_PRODUCTION_TIME)
-    performance = min(1.0, (IDEAL_CYCLE_TIME * total) / operating_time) if operating_time > 0 else 0.0
-    quality = avg_conf_raw if total > 0 else 1.0
+
+    elapsed_time = max(0.001, current_time - start_time)
+
+
+    operating_time = max(0.001, elapsed_time - current_dt)
+
+
+    availability = max(0.0, min(1.0, operating_time / elapsed_time))
+
+
+    if operating_time > 0 and total > 0:
+            actual_cycle_time = operating_time / total  
+            performance = max(0.0, min(1.0, IDEAL_CYCLE_TIME / actual_cycle_time))
+    else:
+            performance = 1.0 if total == 0 else 0.0
+
+       
+    quality = max(0.0, min(1.0, avg_conf_raw)) if total > 0 else 1.0
+
 
     oee_score = (availability * performance * quality) * 100.0
     oee_display = f"{oee_score:.1f}% (DT: {int(current_dt)}s)"
 
     revenue_display = f"${system_metrics['total_revenue']:.2f}"
 
-    elapsed_time = int(current_time - start_time)
     if not time_series_data["Time"] or elapsed_time != time_series_data["Time"][-1]:
         time_series_data["Time"].append(elapsed_time)
         time_series_data["Total Sorted"].append(total)
