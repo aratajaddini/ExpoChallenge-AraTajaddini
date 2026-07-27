@@ -21,8 +21,8 @@ os.environ["GRADIO_ANALYTICS_ENABLED"] = "False"
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 # 1. Startup paths verification
-MODEL_PATH = "model_path"
-DATA_YAML_PATH = "data.yaml path"  # for validating model accuracy on dashboard
+MODEL_PATH = "modelpath.pt"
+DATA_YAML_PATH = "data_path.yaml"  # for validating model accuracy on dashboard
 
 if not os.path.exists(MODEL_PATH):
     logging.warning(f"⚠️ Model file not found at '{MODEL_PATH}'. Ensure correct path before running detection.")
@@ -304,7 +304,7 @@ def check_and_update_conveyor_status():
             downtime_start_marker = None
         send_serial_cmd(json.dumps({"cmd": "START_CONVEYOR"}))
         timestamp = time.strftime("%H:%M:%S")
-        log_msg = f"[{timestamp}] ▶️ SYSTEM RESUMED: Full bins cleared. Conveyor restarted."
+        log_msg = f"[{timestamp}] ▶️ system resumed: full bins cleared. Conveyor restarted."
         log_history.insert(0, log_msg)
         log_history = log_history[:50]
 
@@ -365,7 +365,7 @@ def process_single_frame(frame):
         display_frame = np.array(frame) if frame is not None else np.zeros((480, 640, 3), dtype=np.uint8)
         cv2.putText(display_frame, "EMERGENCY STOPPED", (50, 240), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255, 0, 0), 3)
         return (
-            display_frame, "0 FPS", "0.0%", "0 WPM", "EMERGENCY STOP", "$0.00",
+            display_frame, "0 FPS", "0.0%", "0 WPM", "emergency stop", "$0.00",
             df_rates, "\n".join(log_history[:8]), "🚨 hardware & processing halted via e-stop", df_chart
         )
 
@@ -384,9 +384,9 @@ def process_single_frame(frame):
     enhanced_frame = np.array(frame)
     frame_h, frame_w, _ = enhanced_frame.shape
     trigger_y = int(frame_h * TRIGGER_LINE_RATIO)
-
+    model_input=cv2.cvtColor(enhanced_frame,cv2.COLOR_RGB2BGR)
     results = model.track(
-        enhanced_frame, imgsz=416, conf=0.50, iou=0.45, persist=True, tracker="bytetrack.yaml", verbose=False
+        model_input, imgsz=416, conf=0.50, iou=0.45, persist=True, tracker="bytetrack.yaml", verbose=False
     )[0]
 
 
@@ -466,6 +466,9 @@ def process_single_frame(frame):
     current_dt = total_downtime + ((current_time - downtime_start_marker) if downtime_start_marker else 0.0)
 
 
+
+
+
     elapsed_time = max(0.001, current_time - start_time)
 
 
@@ -475,23 +478,27 @@ def process_single_frame(frame):
     availability = max(0.0, min(1.0, operating_time / elapsed_time))
 
 
-    if operating_time > 0 and total > 0:
-            actual_cycle_time = operating_time / total  
-            performance = max(0.0, min(1.0, IDEAL_CYCLE_TIME / actual_cycle_time))
+    if total > 0:
+        actual_cycle_time = operating_time / total
+        performance = max(0.0, min(1.0, IDEAL_CYCLE_TIME / actual_cycle_time))
     else:
-            performance = 1.0 if total == 0 else 0.0
+        performance = 0.0
+      
+    quality = max(0.0, min(1.0, avg_conf_raw)) if total > 0 else 0.0
 
-       
-    quality = max(0.0, min(1.0, avg_conf_raw)) if total > 0 else 1.0
 
 
-    oee_score = (availability * performance * quality) * 100.0
+
+
+
+    oee_score = (availability * performance * quality) * 100.0 if total > 0 else 0.0
     oee_display = f"{oee_score:.1f}% (DT: {int(current_dt)}s)"
 
     revenue_display = f"${system_metrics['total_revenue']:.2f}"
 
-    if not time_series_data["Time"] or elapsed_time != time_series_data["Time"][-1]:
-        time_series_data["Time"].append(elapsed_time)
+    elapsed_time_int = int(elapsed_time)
+    if not time_series_data["Time"] or elapsed_time_int != time_series_data["Time"][-1]:
+        time_series_data["Time"].append(elapsed_time_int)
         time_series_data["Total Sorted"].append(total)
         if len(time_series_data["Time"]) > 60:
             time_series_data["Time"].pop(0)
@@ -549,7 +556,7 @@ def release_emergency_stop():
     with state_lock:
         is_emergency_stopped = False
         timestamp = time.strftime("%H:%M:%S")
-        log_history.insert(0, f"[{timestamp}] ✅ EMERGENCY STOP RELEASED: Re-evaluating bin status...")
+        log_history.insert(0, f"[{timestamp}] ✅ emergency stop released: Re-evaluating bin status...")
         log_history = log_history[:50]
         check_and_update_conveyor_status()
 
@@ -557,9 +564,9 @@ def release_emergency_stop():
         status_msg_txt = "⚠️ E-Stop released, but a bin is still full — conveyor remains halted."
     else:
         status_msg_txt = "✅ System fully resumed."
-
+    log_history.insert(0, status_msg_txt)
     df_rates = get_current_rates_df()
-    return "\n".join(log_history[:8]), status_msg_txt, df_rates
+    return "\n".join(log_history[:8]), df_rates
 
 
 def empty_selected_bin(bin_name):
@@ -588,7 +595,7 @@ def evaluate_model_benchmark():
         return f"⚠️ **Benchmark Unavailable**: Model weights not loaded from '{MODEL_PATH}'."
 
     try:
-        metrics = model.val(data=DATA_YAML_PATH, verbose=False)
+        metrics = model.val(data=DATA_YAML_PATH, verbose=False ,imgsz=416)
         map50 = metrics.box.map50
         precision = metrics.box.mp
         recall = metrics.box.mr
@@ -761,7 +768,7 @@ with gr.Blocks(title="Industrial Smart Waste Sorter System", theme=gr.themes.Sof
             x="Time",
             y="Total Sorted",
             title="Total Sorted Waste vs. Elapsed Time (seconds)",
-            x_title="Elapsed Time (Seconds)",
+            x_title="elapsed Time (Seconds)",
             y_title="Total Units Sorted",
         )
 
@@ -822,7 +829,7 @@ with gr.Blocks(title="Industrial Smart Waste Sorter System", theme=gr.themes.Sof
     btn_release_estop.click(
         fn=release_emergency_stop,
         inputs=None,
-        outputs=[control_logs, arduino_status_box, rates_table],
+        outputs=[control_logs, rates_table],
     )
 
 if __name__ == "__main__":
