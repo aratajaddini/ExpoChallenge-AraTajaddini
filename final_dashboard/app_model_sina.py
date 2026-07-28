@@ -21,8 +21,8 @@ os.environ["GRADIO_ANALYTICS_ENABLED"] = "False"
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 # 1. Startup paths verification
-MODEL_PATH = "modelpath.pt"
-DATA_YAML_PATH = "data_path.yaml"  # for validating model accuracy on dashboard
+MODEL_PATH = "best_abbas.pt"
+DATA_YAML_PATH = "data.yaml"  # for validating model accuracy on dashboard
 
 if not os.path.exists(MODEL_PATH):
     logging.warning(f"⚠️ Model file not found at '{MODEL_PATH}'. Ensure correct path before running detection.")
@@ -292,7 +292,7 @@ def check_and_update_conveyor_status():
         downtime_start_marker = time.time()
         send_serial_cmd(json.dumps({"cmd": "STOP_CONVEYOR", "reason": f"BIN_FULL_{full_bins[0]}"}))
         timestamp = time.strftime("%H:%M:%S")
-        log_msg = f"[{timestamp}] 🚨 SYSTEM HALTED: Bin [{full_bins[0]}] is FULL! Conveyor Stopped."
+        log_msg = f"[{timestamp}] SYSTEM HALTED: Bin [{full_bins[0]}] is FULL! Conveyor Stopped."
         if log_msg not in log_history[:3]:
             log_history.insert(0, log_msg)
             log_history = log_history[:50]
@@ -304,7 +304,7 @@ def check_and_update_conveyor_status():
             downtime_start_marker = None
         send_serial_cmd(json.dumps({"cmd": "START_CONVEYOR"}))
         timestamp = time.strftime("%H:%M:%S")
-        log_msg = f"[{timestamp}] ▶️ system resumed: full bins cleared. Conveyor restarted."
+        log_msg = f"[{timestamp}]  system resumed: full bins cleared. Conveyor restarted."
         log_history.insert(0, log_msg)
         log_history = log_history[:50]
 
@@ -535,14 +535,14 @@ def trigger_emergency_stop():
     send_serial_cmd(json.dumps({"cmd": "EMERGENCY_STOP", "reason": "OPERATOR_E_STOP"}))
 
     timestamp = time.strftime("%H:%M:%S")
-    log_msg = f"[{timestamp}] 🚨🚨 emergency stop activated by operator! All Operations Halted."
+    log_msg = f"[{timestamp}] 🚨 emergency stop activated by operator! All Operations Halted."
     log_history.insert(0, log_msg)
     log_history = log_history[:50]
 
     df_rates = get_current_rates_df()
     df_chart = pd.DataFrame(time_series_data)
     empty_frame = np.zeros((480, 640, 3), dtype=np.uint8)
-    cv2.putText(empty_frame, "EMERGENCY STOPPED", (50, 240), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255, 0, 0), 3)
+    cv2.putText(empty_frame, "EMERGENCY STOPPED", (80, 240), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255, 0, 0), 3)
 
     return (
         empty_frame, "0 FPS", "0.0%", "0 WPM", "emergency stop", f"${system_metrics['total_revenue']:.2f}",
@@ -556,30 +556,33 @@ def release_emergency_stop():
     with state_lock:
         is_emergency_stopped = False
         timestamp = time.strftime("%H:%M:%S")
-        log_history.insert(0, f"[{timestamp}] ✅ emergency stop released: Re-evaluating bin status...")
+        log_history.insert(0, f"[{timestamp}] emergency stop released: Re-evaluating bin status...")
         log_history = log_history[:50]
         check_and_update_conveyor_status()
 
     if is_conveyor_halted:
         status_msg_txt = "⚠️ E-Stop released, but a bin is still full — conveyor remains halted."
     else:
-        status_msg_txt = "✅ System fully resumed."
+        status_msg_txt = " System fully resumed."
     log_history.insert(0, status_msg_txt)
     df_rates = get_current_rates_df()
     return "\n".join(log_history[:8]), df_rates
 
 
 def empty_selected_bin(bin_name):
+   
     global bin_fill_level, log_history
 
     if not bin_name or bin_name not in BIN_CAPACITIES:
         return get_current_rates_df(), "\n".join(log_history[:8])
 
     with state_lock:
+
+        
         bin_fill_level[bin_name] = 0
 
         timestamp = time.strftime("%H:%M:%S")
-        log_msg = f"[{timestamp}] 🗑️ OPERATOR ACTION: Bin [{bin_name}] physically emptied. Total metrics preserved."
+        log_msg = f"[{timestamp}]  OPERATOR ACTION: Bin [{bin_name}] physically emptied. Total metrics preserved."
         log_history.insert(0, log_msg)
         log_history = log_history[:50]
 
@@ -600,7 +603,7 @@ def evaluate_model_benchmark():
         precision = metrics.box.mp
         recall = metrics.box.mr
         return (
-            f"📊 **Offline Model Benchmarks (Validation Set)**:\n"
+            f" **Offline Model Benchmarks (Validation Set)**:\n"
             f"• **mAP@50**: {map50:.3f}\n"
             f"• **Precision**: {precision:.3f}\n"
             f"• **Recall**: {recall:.3f}\n"
@@ -657,6 +660,52 @@ def reset_system_metrics():
     )
 
 
+# def analyze_uploaded_video(video_path):
+#     if not video_path:
+#         df_rates = get_current_rates_df()
+#         empty_frame = np.zeros((480, 640, 3), dtype=np.uint8)
+#         yield empty_frame, "0 FPS", "0.0%", "0 WPM", "0.0%", "$0.00", df_rates, "⚠️ Please upload a video first!", "Waiting...", pd.DataFrame({"Time": [0], "Total Sorted": [0]})
+#         return
+
+#     cap = cv2.VideoCapture(video_path)
+#     while cap.isOpened():
+#         ret, frame = cap.read()
+#         if not ret:
+#             break
+#         frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+#         yield process_single_frame(frame_rgb)
+#         time.sleep(0.01)
+#     cap.release()
+
+
+
+
+
+def resize_with_aspect_ratio(image, target_size=(640, 640)):
+    
+    h, w = image.shape[:2]
+    target_w, target_h = target_size
+
+   
+    scale = min(target_w / w, target_h / h)
+    new_w, new_h = int(w * scale), int(h * scale)
+
+   
+    resized_image = cv2.resize(image, (new_w, new_h), interpolation=cv2.INTER_AREA)
+
+  
+    padded_image = np.zeros((target_h, target_w, 3), dtype=np.uint8)
+
+    
+    top = (target_h - new_h) // 2
+    left = (target_w - new_w) // 2
+    padded_image[top:top + new_h, left:left + new_w] = resized_image
+
+    return padded_image
+
+
+
+
 def analyze_uploaded_video(video_path):
     if not video_path:
         df_rates = get_current_rates_df()
@@ -665,18 +714,34 @@ def analyze_uploaded_video(video_path):
         return
 
     cap = cv2.VideoCapture(video_path)
+    
+    frame_count = 0
+    skip_frames = 2 
+    last_processed_output = None
+
     while cap.isOpened():
         ret, frame = cap.read()
         if not ret:
             break
-        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        yield process_single_frame(frame_rgb)
-        time.sleep(0.01)
+        
+        frame_count += 1
+
+      
+        frame_resized = resize_with_aspect_ratio(frame, target_size=(640, 640))
+        frame_rgb = cv2.cvtColor(frame_resized, cv2.COLOR_BGR2RGB)
+
+      
+        if frame_count % skip_frames == 0 or last_processed_output is None:
+            last_processed_output = process_single_frame(frame_rgb)
+
+      
+        yield last_processed_output
+
     cap.release()
 
 
 def toggle_source(mode):
-    if mode == "🎬 Video File":
+    if mode == " Video File":
         return gr.update(visible=True), gr.update(visible=False), gr.update(visible=True)
     else:
         return gr.update(visible=False), gr.update(visible=True), gr.update(visible=False)
@@ -685,91 +750,376 @@ def toggle_source(mode):
 
 
 
+custom_css = """
+/* set the total screen space*/
+.gradio-container {
+   /* width:600px !important;*/
+    max-width: 2600px !important;
+    margin: 20px !important;
+    padding: 20px !important;
+}
 
-# Gradio GUI Construction
-with gr.Blocks(title="Industrial Smart Waste Sorter System", theme=gr.themes.Soft()) as demo:
-    gr.Markdown("# 🏭 Industrial Smart Waste Sorting Automation System")
-    gr.Markdown("*Notice: Financial values and Bin capacities are demo parameters calibrated for 18 waste categories.*")
+/* spacing between rows and columns */
+.row {
+    gap: 16px !important;
+}
 
+.column {
+    gap: 12px !important;
+}
+
+
+/* header styling*/
+
+.header-box {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 28px;
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+    margin-bottom: 24px;
+}
+
+.header-brand {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.header-icon {
+    font-size: 32px;
+    background: rgba(16, 185, 129, 0.15);
+    padding: 10px;
+    border-radius: 12px;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.header-title {
+    font-size: 24px;
+    font-weight: 800;
+    color: #ffffff;
+    letter-spacing: 0.5px;
+    margin: 0;
+}
+
+.header-subtitle {
+    font-size: 13px;
+    color: #94a3b8;
+    margin-top: 2px;
+}
+
+.header-badge {
+    background: rgba(16, 185, 129, 0.2);
+    color: #34d399;
+    border: 1px solid rgba(52, 211, 153, 0.4);
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    background-color: #34d399;
+    border-radius: 50%;
+    box-shadow: 0 0 8px #34d399;
+}
+
+
+/* styling gradio labels */
+
+.gradio-container label span {
+    background: transparent !important;
+    color: #cbd5e1 !important;
+    font-weight: 600 !important;
+    font-size: 13px !important;
+    padding: 0 !important;
+    border: none !important;
+}
+
+
+/* styling gradio's boxes text*/
+
+.gradio-container input[type="text"] {
+    font-size: 16px !important;
+    font-weight: 700 !important;
+    color: #38bdf8 !important;
+}
+
+
+.metric-card {
+    background: rgba(30, 41, 59, 0.5) !important;
+    border: 1px solid rgba(255, 255, 255, 0.05) !important;
+    border-radius: 12px !important;
+    padding: 12px !important;
+}
+
+
+
+.metric-card_btns {
+    background: rgba(30, 41, 59, 0.5) !important;
+    border: 1px solid rgba(255, 255, 255, 0.05) !important;
+    border-radius: 12px !important;
+    padding: 12px !important;
+    max-width:150px;
+}
+
+
+
+
+/*.metric-card-metrics {
+    background: rgba(17, 197 ,217  ,0.65) !important;
+    border: 1px solid rgba(255, 255, 255, 0.05) !important;
+    border-radius: 12px !important;
+    padding: 12px !important;
+}*/
+
+
+.btn-start_to_analyze {
+    background-color: rgb(5, 150, 105) !important;
+    color: white !important;
+    font-weight: 700 !important;
+    border: 1px solid rgba(255, 255, 255, 0.05) !important;
+    border-radius: 12px !important;
+    padding: 12px !important;
+}
+.btn-start_to_analyze:hover {
+    background-color: #047857 !important;
+    box-shadow: 0 0 12px rgba(5, 150, 105, 0.5) !important;
+}
+
+
+
+
+
+.btn-map {
+    background-color: rgba(10, 87, 56 , 0.58) !important;
+    color: white !important;
+    font-weight: 700 !important;
+    border: 1px solid rgba(255, 255, 255, 0.05) !important;
+    border-radius: 12px !important;
+    padding: 12px !important;
+}
+.btn-map:hover {
+    background-color: rgba(10, 87, 56 , 0.58)  !important;
+    box-shadow: 0 0 12px rgba(10, 87, 56, 0.5) !important;
+}
+
+
+
+.btn-reset-m {
+    background-color: rgba(17, 197 ,217  ,0.65) !important;
+    color: white !important;
+    font-weight: 700 !important;
+    border: 1px solid rgba(255, 255, 255, 0.05) !important;
+    border-radius: 12px !important;
+    padding: 12px !important;
+}
+.btn-reset-m:hover {
+    background-color: rgba(17, 197 ,217  ,0.65) !important;
+    box-shadow: 0 0 12px rgba(17, 197, 217, 0.5) !important;
+}
+
+
+
+
+
+
+.btn_empty_bin {
+    background-color: #F44336 !important;
+    color: white !important;
+    font-weight: 700 !important;
+    border: 1px solid rgba(255, 255, 255, 0.05) !important;
+    border-radius: 12px !important;
+    padding: 12px !important;
+}
+.btn_empty_bin:hover {
+    background-color: #F44336 !important;
+    box-shadow: 0 0 12px rgba(244, 67, 54, 0.5) !important;
+}
+
+
+
+
+
+
+.btn-reconnect {
+    background-color: #6366f1 !important;
+    color: white !important;
+    font-weight: 700 !important;
+    border: 1px solid rgba(255, 255, 255, 0.05) !important;
+    border-radius: 12px !important;
+    padding: 12px !important;
+}
+.btn-reconnect:hover {
+    background-color: #4f46e5 !important;
+    box-shadow: 0 0 12px rgba(99, 102, 241, 0.5) !important;
+}
+
+
+.btn-estop {
+    background-color: #dc2626 !important;
+    color: white !important;
+    font-weight: 800 !important;
+    border: 1px solid rgba(255, 255, 255, 0.05) !important;
+    border-radius: 12px !important;
+    padding: 12px !important;
+}
+.btn-estop:hover {
+    background-color: #b91c1c !important;
+    box-shadow: 0 0 15px rgba(220, 38, 38, 0.6) !important;
+}
+
+
+.btn-resume {
+    background-color: #059669 !important;
+    color: white !important;
+    font-weight: 700 !important;
+    border: 1px solid rgba(255, 255, 255, 0.05) !important;
+    border-radius: 12px !important;
+    padding: 12px !important;
+}
+.btn-resume:hover {
+    background-color: #047857 !important;
+    box-shadow: 0 0 12px rgba(5, 150, 105, 0.5) !important;
+}
+
+"""
+
+with gr.Blocks(title="ECO-SORT AI | Smart Waste Automation", theme=gr.themes.Soft(), css=custom_css) as demo:
+    
+
+    gr.HTML(
+        """
+        <div class="header-box">
+            <div class="header-brand">
+                <div class="header-icon">♻️</div>
+                <div>
+                    <div class="header-title">ECO-SORT AI <span style="font-size:12px; opacity:0.6; vertical-align:super;">v1.1</span></div>
+                    <div class="header-subtitle">Industrial Vision & Robotic Sorting Dashboard</div>
+                </div>
+            </div>
+            <div class="header-badge">
+                <span class="status-dot"></span> AI AUTOMATION SYSTEM
+            </div>
+        </div>
+        <br>
+    
+        """
+    )
+
+   
     with gr.Row():
-        with gr.Column(scale=2):
+        
+        # BLOCK 1: System Infrastructure
+        with gr.Column(scale=1, elem_classes=["metric-card"]):
+            gr.Markdown("  System Status")
             arduino_status_box = gr.Textbox(
-                label="🔌 Hardware Serial Port Status (Arduino Connection)",
+                label="Hardware Connection (Arduino)",
                 value=status_msg,
                 interactive=False,
             )
-        with gr.Column(scale=1):
-            btn_reconnect = gr.Button("⚡ Reconnect Hardware", variant="primary")
-        with gr.Column(scale=1):
-            btn_estop = gr.Button("🛑 EMERGENCY STOP", variant="stop")
-            btn_release_estop = gr.Button("✅ Resume Operations", variant="secondary")
+            metric_fps = gr.Textbox(label="FPS (Processing Speed)", value="0 FPS", interactive=False)
+            metric_oee = gr.Textbox(label="Overall Effectiveness (OEE)", value="0.0%", interactive=False)
 
-    with gr.Row():
-        with gr.Column():
-            metric_fps = gr.Textbox(label="⚡ FPS (Processing Speed)", value="0 FPS")
-        with gr.Column():
-            metric_conf = gr.Textbox(label="🎯 Model Accuracy (Quality)", value="0.0%")
-        with gr.Column():
-            metric_speed = gr.Textbox(label="⚡ Real-time Speed (Performance)", value="0 WPM")
-        with gr.Column():
-            metric_oee = gr.Textbox(label="📊 Overall Effectiveness (OEE / Downtime)", value="0.0%")
-        with gr.Column():
-            metric_rev = gr.Textbox(label="💵 Economic Value Generated", value="$0.00")
 
+
+
+
+
+        # BLOCK 2: Performance Metrics
+        with gr.Column(scale=1, elem_classes=["metric-card"]):
+            gr.Markdown("  Performance Metrics")
+            metric_speed = gr.Textbox(label="Real-time Speed (WPM)", value="0 WPM", interactive=False)
+            metric_conf = gr.Textbox(label="Model Accuracy (Quality)", value="0.0%", interactive=False)
+            metric_rev = gr.Textbox(label="Economic Value Generated", value="$0.00", interactive=False)
+
+        # BLOCK 3: Control Center
+        with gr.Column(scale=1, elem_classes=["metric-card_btns"]):
+            gr.Markdown("  Control Center")
+            btn_reconnect = gr.Button(" Reconnect Hardware",elem_classes=["btn-reconnect"])
+            btn_estop = gr.Button(" EMERGENCY STOP",elem_classes=["btn-estop"])
+            btn_release_estop = gr.Button(" Resume Operations",elem_classes=["btn-resume"])
+
+    gr.HTML("<hr style='margin: 20px 0; border: none; border-top: 1px solid rgba(255,255,255,0.1);'>")
+
+    
+
+    #  MAIN MONITORING & ANALYSIS SECTION
     with gr.Row():
-        with gr.Column(scale=2):
-            gr.Markdown("### 📷 Live Conveyor Belt Monitoring")
+        
+        with gr.Column(scale=2,elem_classes=["metric-card"]):
+            gr.Markdown("Live Conveyor Belt Monitoring")
             source_selector = gr.Radio(
-                choices=["📹 Webcam", "🎬 Video File"],
-                value="🎬 Video File",
+                choices=[" Webcam", " Video File"],
+                value=" Webcam",
                 label="Select Input Stream Source",
+                
             )
-            input_video = gr.Video(label="Upload Conveyor Video File", visible=True)
-            btn_analyze = gr.Button("▶️ Start Analysis", variant="primary", visible=True)
-
+            
             input_cam = gr.Image(
-                sources=["webcam"], streaming=True, type="numpy", label="Input Stream", visible=False
+                sources=["webcam"], streaming=True, type="numpy", label="Input Stream", visible=True
             )
+            
+
+            input_video = gr.Video(label="Upload Conveyor Video File", visible=False)
+            btn_analyze = gr.Button(" Start Analysis", visible=True,elem_classes=["btn-start_to_analyze"])
+
             output_cam = gr.Image(show_label=False, type="numpy", label="Processed Stream")
 
-        with gr.Column(scale=1):
-            gr.Markdown("### 📈 Bin Capacities & Selective Bin Evacuation")
+        
+        with gr.Column(scale=1,elem_classes=["metric-card"]):
+            gr.Markdown("Bin Capacities & Evacuation")
             rates_table = gr.Dataframe(value=get_current_rates_df(), interactive=False)
-            gr.Markdown(
-                "💡 *Notice: **Sorted Count (Total)** tracks lifetime sorted items, "
-                "while **Bin Fill Status** represents current physical capacity level.* "
-            )
-
+            # gr.Markdown(
+            #     "<small>*Notice: **Sorted Count** tracks lifetime items; **Bin Fill Status** shows physical capacity.*</small>"
+            # )
+        
             with gr.Row():
                 select_bin_dropdown = gr.Dropdown(
+                    
                     choices=list(CLASS_MAPPING.keys()),
                     label="Select Bin to Clear",
                     value="Plastic container",
+                    scale=2,
+                    elem_classes=["metric-card"]
                 )
-                btn_empty_bin = gr.Button("🗑️ Empty Selected Bin", variant="secondary")
 
-            gr.Markdown("### 🤖 Serial Command & Kinematics Payload")
+                btn_empty_bin = gr.Button(" Empty Bin", scale=1,elem_classes=["btn_empty_bin"])
+
+            gr.Markdown(" Kinematics & Serial Payload")
             kinematics_payload_box = gr.Textbox(
-                lines=9, interactive=False, label="Real-time Kinematics & Serial Command Payload"
+                lines=7, interactive=False, label="Real-time Command Payload",
             )
 
-            gr.Markdown("### 🧠 Robot Logic & Controller Logs")
-            control_logs = gr.Textbox(lines=5, interactive=False, label="Priority Event Log")
+            gr.Markdown("Event Logs & Benchmarks")
+            control_logs = gr.Textbox(lines=4, interactive=False, label="Priority Event Log")
 
-            btn_eval = gr.Button("📊 Run Offline Model Evaluation (mAP)", variant="secondary")
-            gr.Markdown("*Note: Running benchmark will briefly pause the video stream processing.*")
+            with gr.Row():
+                btn_eval = gr.Button(" Run  Benchmark",elem_classes=["btn-map"])
+                btn_reset = gr.Button(" Reset Metrics",elem_classes=["btn-reset-m"])
+            
             eval_output = gr.Markdown()
 
-            btn_reset = gr.Button("🔄 Reset Metrics & Counters", variant="secondary")
-
+    # TIME SERIES CHART SECTION 
+    gr.HTML("<hr style='margin: 20px 0; border: none; border-top: 1px solid rgba(255,255,255,0.1);'>")
     with gr.Row():
         live_chart = gr.LinePlot(
             value=pd.DataFrame(time_series_data),
             x="Time",
             y="Total Sorted",
             title="Total Sorted Waste vs. Elapsed Time (seconds)",
-            x_title="elapsed Time (Seconds)",
+            x_title="Elapsed Time (Seconds)",
             y_title="Total Units Sorted",
+            height=300,
+            elem_classes=["metric-card"]
         )
 
     # Event Bindings
@@ -785,7 +1135,7 @@ with gr.Blocks(title="Industrial Smart Waste Sorter System", theme=gr.themes.Sof
             metric_rev, rates_table, control_logs, kinematics_payload_box, live_chart,
         ],
         queue=True,
-        show_progress="hidden",
+        
     )
 
     btn_analyze.click(
@@ -802,6 +1152,7 @@ with gr.Blocks(title="Industrial Smart Waste Sorter System", theme=gr.themes.Sof
         inputs=select_bin_dropdown,
         outputs=[rates_table, control_logs],
     )
+    
 
     btn_eval.click(fn=evaluate_model_benchmark, inputs=None, outputs=eval_output)
 
@@ -825,7 +1176,6 @@ with gr.Blocks(title="Industrial Smart Waste Sorter System", theme=gr.themes.Sof
         ],
     )
 
-    # Fixed output assignment for Release E-Stop
     btn_release_estop.click(
         fn=release_emergency_stop,
         inputs=None,
