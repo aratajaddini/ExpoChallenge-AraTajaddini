@@ -384,12 +384,13 @@ def process_single_frame(frame):
     prev_frame_time = current_time
     fps_display = f"{int(fps)} FPS"
 
-    enhanced_frame = np.array(frame)
+
+    enhanced_frame = cv2.cvtColor(np.array(frame), cv2.COLOR_RGB2BGR)
     frame_h, frame_w, _ = enhanced_frame.shape
     trigger_y = int(frame_h * TRIGGER_LINE_RATIO)
-    model_input=cv2.cvtColor(enhanced_frame,cv2.COLOR_RGB2BGR)
+    
     results = model.track(
-        model_input, imgsz=416, conf=0.50, iou=0.45, persist=True, tracker="bytetrack.yaml", verbose=False
+        np.array(frame), imgsz=640, conf=0.15, iou=0.60, persist=True, tracker="bytetrack.yaml", verbose=False
     )[0]
 
 
@@ -510,6 +511,7 @@ def process_single_frame(frame):
     df_chart = pd.DataFrame(time_series_data)
     logs_display = "\n".join(log_history[:8])
 
+    enhanced_frame = cv2.cvtColor(enhanced_frame, cv2.COLOR_BGR2RGB)
     return (
         enhanced_frame,
         fps_display,
