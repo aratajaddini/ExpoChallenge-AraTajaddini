@@ -11,9 +11,10 @@ from ultralytics import YOLO
 import Arduino
 
 
+
 CONVEYOR_DIRECTION = "DOWNWARD"
 
-
+CONVEYOR_STATUS=True
 # Disable Gradio analytics
 os.environ["GRADIO_ANALYTICS_ENABLED"] = "False"
 
@@ -83,7 +84,7 @@ WASTE_VALUES = {
     "Cigarette": 0.00, "Other litter": 0.00, "Unlabeled litter": 0.00,
 }
 
-BIN_CAPACITIES = {k: 5 for k in CLASS_MAPPING.keys()}
+BIN_CAPACITIES = {k: 3 for k in CLASS_MAPPING.keys()}
 
 TRIGGER_LINE_RATIO = 0.50
 TRIGGER_TOLERANCE = 25
@@ -137,12 +138,13 @@ log_history = []
 time_series_data = {"Time": [0], "Total Sorted": [0]}
 
 
-def send_serial_cmd(command_payload: str):
-    global arduino
+def send_serial_cmd(command_payload: str,arduino):
     if arduino and hasattr(arduino, "is_open") and arduino.is_open:
         try:
-            arduino.write(f"{command_payload}\n".encode('utf-8'))
+            Arduino.send_to_arduino(message=command_payload,arduino=arduino)
+           
             return True
+
         except Exception as e:
             logging.error(f"Serial transmission error: {e}")
     return False
@@ -245,7 +247,7 @@ def calculate_kinematics_and_send(obj, frame, frame_width, frame_height):
 
 
     if time_to_grab_ms >= 0:
-        send_serial_cmd(payload_json)
+        send_serial_cmd(payload_json,arduino=arduino)
 
     timestamp = time.strftime("%H:%M:%S")
     formatted_payload_display = (
@@ -289,8 +291,9 @@ def check_and_update_conveyor_status():
 
     if full_bins and not is_conveyor_halted:
         is_conveyor_halted = True
+        
         downtime_start_marker = time.time()
-        send_serial_cmd(json.dumps({"cmd": "STOP_CONVEYOR", "reason": f"BIN_FULL_{full_bins[0]}"}))
+        send_serial_cmd(json.dumps({"cmd": "STOP_CONVEYOR", "reason": f"BIN_FULL_{full_bins[0]}"}),arduino=arduino)
         timestamp = time.strftime("%H:%M:%S")
         log_msg = f"[{timestamp}] SYSTEM HALTED: Bin [{full_bins[0]}] is FULL! Conveyor Stopped."
         if log_msg not in log_history[:3]:
@@ -302,7 +305,7 @@ def check_and_update_conveyor_status():
         if downtime_start_marker:
             total_downtime += (time.time() - downtime_start_marker)
             downtime_start_marker = None
-        send_serial_cmd(json.dumps({"cmd": "START_CONVEYOR"}))
+        send_serial_cmd(json.dumps({"cmd": "START_CONVEYOR"}),arduino=arduino)
         timestamp = time.strftime("%H:%M:%S")
         log_msg = f"[{timestamp}]  system resumed: full bins cleared. Conveyor restarted."
         log_history.insert(0, log_msg)
@@ -532,7 +535,7 @@ def trigger_emergency_stop():
         if not downtime_start_marker:
             downtime_start_marker = time.time()
 
-    send_serial_cmd(json.dumps({"cmd": "EMERGENCY_STOP", "reason": "OPERATOR_E_STOP"}))
+    send_serial_cmd(json.dumps({"cmd": "EMERGENCY_STOP", "reason": "OPERATOR_E_STOP"}),arduino=arduino)
 
     timestamp = time.strftime("%H:%M:%S")
     log_msg = f"[{timestamp}] 🚨 emergency stop activated by operator! All Operations Halted."
@@ -710,34 +713,55 @@ def analyze_uploaded_video(video_path):
     if not video_path:
         df_rates = get_current_rates_df()
         empty_frame = np.zeros((480, 640, 3), dtype=np.uint8)
-        yield empty_frame, "0 FPS", "0.0%", "0 WPM", "0.0%", "$0.00", df_rates, "⚠️ Please upload a video first!", "Waiting...", pd.DataFrame({"Time": [0], "Total Sorted": [0]})
+        yield (
+            empty_frame, "0 FPS", "0.0%", "0 WPM", "0.0%", "$0.00", 
+            df_rates, "⚠️ Please upload a video first!", "Waiting...", 
+            pd.DataFrame({"Time": [0], "Total Sorted": [0]})
+        )
         return
 
     cap = cv2.VideoCapture(video_path)
     
+    
+    video_fps = cap.get(cv2.CAP_PROP_FPS)
+    if not video_fps or video_fps <= 0:
+        video_fps = 30.0
+    target_delay = 1.0 / video_fps
+
     frame_count = 0
-    skip_frames = 2 
+    skip_frames = 2
     last_processed_output = None
 
     while cap.isOpened():
+        loop_start_time = time.time() 
+        
         ret, frame = cap.read()
         if not ret:
             break
         
         frame_count += 1
 
-      
         frame_resized = resize_with_aspect_ratio(frame, target_size=(640, 640))
         frame_rgb = cv2.cvtColor(frame_resized, cv2.COLOR_BGR2RGB)
 
-      
         if frame_count % skip_frames == 0 or last_processed_output is None:
             last_processed_output = process_single_frame(frame_rgb)
 
-      
-        yield last_processed_output
+        
+        if last_processed_output is not None:
+            yield last_processed_output
+
+       
+        processing_time = time.time() - loop_start_time
+        sleep_time = max(0.0, (target_delay * skip_frames) - processing_time)
+        time.sleep(sleep_time)
 
     cap.release()
+
+
+
+
+
 
 
 def toggle_source(mode):
@@ -755,7 +779,7 @@ custom_css = """
 .gradio-container {
    /* width:600px !important;*/
     max-width: 2600px !important;
-    margin: 20px !important;
+    margin: 30px !important;
     padding: 20px !important;
 }
 
@@ -775,6 +799,8 @@ custom_css = """
     display: flex;
     justify-content: space-between;
     align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;       
     padding: 20px 28px;
     background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
     border: 1px solid rgba(255, 255, 255, 0.1);
@@ -795,6 +821,7 @@ custom_css = """
     padding: 10px;
     border-radius: 12px;
     border: 1px solid rgba(16, 185, 129, 0.3);
+    flex-shrink: 0;
 }
 
 .header-title {
@@ -803,12 +830,14 @@ custom_css = """
     color: #ffffff;
     letter-spacing: 0.5px;
     margin: 0;
+    line-height: 1.2;
 }
 
 .header-subtitle {
     font-size: 13px;
     color: #94a3b8;
-    margin-top: 2px;
+    margin-top: 4px;
+    line-height: 1.3;
 }
 
 .header-badge {
@@ -822,6 +851,7 @@ custom_css = """
     display: flex;
     align-items: center;
     gap: 6px;
+    white-space: nowrap; 
 }
 
 .status-dot {
@@ -830,8 +860,37 @@ custom_css = """
     background-color: #34d399;
     border-radius: 50%;
     box-shadow: 0 0 8px #34d399;
+    flex-shrink: 0;
 }
 
+
+@media (max-width: 640px) {
+    .header-box {
+        flex-direction: column;     
+        align-items: flex-start;     
+        padding: 16px 18px;          
+        gap: 12px;
+    }
+    
+    .header-icon {
+        font-size: 24px;
+        padding: 8px;
+    }
+
+    .header-title {
+        font-size: 18px;            
+    }
+
+    .header-subtitle {
+        font-size: 11px;
+    }
+    
+    .header-badge {
+        font-size: 11px;
+        padding: 4px 10px;
+        align-self: flex-start;      
+    }
+}
 
 /* styling gradio labels */
 
@@ -908,7 +967,7 @@ custom_css = """
     padding: 12px !important;
 }
 .btn-map:hover {
-    background-color: rgba(10, 87, 56 , 0.58)  !important;
+    background-color: rgba(3, 75, 40 , 0.58)   !important;
     box-shadow: 0 0 12px rgba(10, 87, 56, 0.5) !important;
 }
 
@@ -923,7 +982,7 @@ custom_css = """
     padding: 12px !important;
 }
 .btn-reset-m:hover {
-    background-color: rgba(17, 197 ,217  ,0.65) !important;
+    background-color: rgba(5, 180 ,185  ,0.65) !important;
     box-shadow: 0 0 12px rgba(17, 197, 217, 0.5) !important;
 }
 
@@ -941,7 +1000,7 @@ custom_css = """
     padding: 12px !important;
 }
 .btn_empty_bin:hover {
-    background-color: #F44336 !important;
+    background-color: rgb(215, 40 ,43)!important;
     box-shadow: 0 0 12px rgba(244, 67, 54, 0.5) !important;
 }
 
@@ -993,7 +1052,13 @@ custom_css = """
 
 """
 
-with gr.Blocks(title="ECO-SORT AI | Smart Waste Automation", theme=gr.themes.Soft(), css=custom_css) as demo:
+
+
+custom_head = """
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+"""
+
+with gr.Blocks(title="ECO-SORT AI | Smart Waste Automation") as demo:
     
 
     gr.HTML(
@@ -1070,7 +1135,10 @@ with gr.Blocks(title="ECO-SORT AI | Smart Waste Automation", theme=gr.themes.Sof
             
 
             input_video = gr.Video(label="Upload Conveyor Video File", visible=False)
-            btn_analyze = gr.Button(" Start Analysis", visible=True,elem_classes=["btn-start_to_analyze"])
+
+            # gr.Examples(examples=[["examples/output1.mp4"]],inputs=input_video,label="Video Examples")
+            
+            btn_analyze = gr.Button(" Start Analysis", visible=False,elem_classes=["btn-start_to_analyze"])
 
             output_cam = gr.Image(show_label=False, type="numpy", label="Processed Stream")
 
@@ -1183,4 +1251,9 @@ with gr.Blocks(title="ECO-SORT AI | Smart Waste Automation", theme=gr.themes.Sof
     )
 
 if __name__ == "__main__":
-    demo.queue().launch(share=True)
+    demo.queue().launch(share=False,
+    theme=gr.themes.Soft(),
+    css=custom_css,
+    head=custom_head)
+
+    
