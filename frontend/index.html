@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="dark" />
+
+  <title>TraceSort – AI Waste Sorting Robot</title>
+  <meta name="description" content="TraceSort uses YOLOv8 and AI to classify waste materials in milliseconds." />
+
+  <!-- SEO -->
+  <meta name="robots" content="index,follow,max-image-preview:large" />
+  <link rel="canonical" href="https://example.com/" />
+
+  <!-- Theme color (browsers / PWA feel) -->
+  <meta name="theme-color" content="#0B0F14" />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="TraceSort" />
+  <meta property="og:title" content="TraceSort – AI Waste Sorting Robot" />
+  <meta property="og:description" content="TraceSort uses YOLOv8 and AI to classify waste materials in milliseconds." />
+  <meta property="og:url" content="https://example.com/" />
+  <meta property="og:image" content="https://example.com/assets/og-cover.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="TraceSort – AI Waste Sorting Robot" />
+  <meta name="twitter:description" content="TraceSort uses YOLOv8 and AI to classify waste materials in milliseconds." />
+  <meta name="twitter:image" content="https://example.com/assets/og-cover.png" />
+
+  <!-- Favicon (preserved) -->
+  <link rel="icon" type="image/png" sizes="32x32" href="./assets/favicon-32.png" />
+  <link rel="icon" type="image/png" sizes="48x48" href="./assets/favicon-48.png" />
+  <link rel="apple-touch-icon" href="./assets/favicon-180.png" />
+
+  <!-- Google Fonts (preserved) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Plus+Jakarta+Sans:ital,wght@0,600;0,700;0,800;1,600&display=swap"
+    rel="stylesheet"
+  />
+
+  <!-- CSS -->
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+  <!-- ============================================================ -->
+  <!-- SPLASH PAGE – Static image background                        -->
+  <!-- ============================================================ -->
+  <div id="splash" role="dialog" aria-modal="true" aria-label="Welcome to TraceSort">
+    <img
+      class="splash-image"
+      src="./assets/before-industry-4.0.png"
+      alt="Traditional waste sorting before Industry 4.0"
+    />
+    <div class="splash-overlay-dark"></div>
+
+    <div class="splash-content">
+      <div class="splash-badge">
+        <span class="badge-icon" aria-hidden="true">🏭</span>
+        <span class="badge-text">Before Industry 4.0</span>
+      </div>
+
+      <h2 class="splash-title-static">Recycling Before Industry 4.0</h2>
+
+      <button class="splash-btn" id="enterBtn" type="button">
+        <span>See the Future Now</span>
+        <svg
+          class="btn-arrow"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+          focusable="false"
+        >
+          <path d="M5 12h14M12 5l7 7-7 7" />
+        </svg>
+      </button>
+
+      <div class="splash-footer-line" aria-hidden="true"></div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- MAIN CONTENT (after click)                                   -->
+  <!-- ============================================================ -->
+  <div id="main-content">
+    <!-- ===== NAV ===== -->
+    <nav class="site-nav" role="navigation" aria-label="Main navigation">
+      <a href="#hero" class="nav-brand">
+        <img class="nav-logo" src="./assets/logo.png" alt="TraceSort Logo" />
+        TraceSort
+      </a>
+
+      <button
+        class="nav-toggle"
+        id="navToggle"
+        type="button"
+        aria-expanded="false"
+        aria-controls="navLinks"
+        aria-label="Toggle navigation menu"
+      >
+        <span aria-hidden="true"></span><span aria-hidden="true"></span><span aria-hidden="true"></span>
+      </button>
+
+      <ul class="nav-links" id="navLinks">
+        <li><a href="#story">Story</a></li>
+        <li><a href="#demo">Demo</a></li>
+        <li><a href="#contact">Contact</a></li>
+      </ul>
+    </nav>
+
+    <!-- ===== MAIN ===== -->
+    <main>
+      <!-- ============================================================ -->
+      <!-- HERO                                                        -->
+      <!-- ============================================================ -->
+      <section id="hero">
+        <video class="hero-media" autoplay muted loop playsinline preload="auto" aria-hidden="true">
+          <source src="./video/main-shot.mp4" type="video/mp4" />
+        </video>
+
+        <div class="hero-overlay"></div>
+
+        <div class="hero-content">
+          <h1>The Future of Recycling<br />Starts Smart</h1>
+
+          <a class="cta-btn" href="#story">
+            Explore the Project <span class="arrow" aria-hidden="true"></span>
+          </a>
+        </div>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- STORY                                                       -->
+      <!-- ============================================================ -->
+      <section id="story">
+        <div class="story-container">
+          <div class="story-header">
+            <span class="eyebrow eyebrow-blue">HOW IT WORKS</span>
+            <h2>From Trash to Action in &lt;100ms</h2>
+            <p class="intro-text">
+              Built on YOLOv8 and TrashNet, it performs image capture, classification, and actuation
+              sequentially within a fast inference pipeline.
+            </p>
+          </div>
+
+          <div class="cards-grid">
+            <!-- Step 1 -->
+            <div class="card card-step" data-step="01">
+              <div class="card-top">
+                <div class="icon-box icon-blue" aria-hidden="true">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path>
+                  </svg>
+                </div>
+                <span class="card-step-num">01</span>
+              </div>
+              <h3 class="card-title">Instant Waste Recognition</h3>
+              <p class="card-body">
+                Each frame is analyzed in real time to identify the material type with high speed and consistency.
+              </p>
+              <div class="card-footer-badge badge-blue">
+                <span>Sub‑100ms Latency</span>
+              </div>
+            </div>
+
+            <!-- Step 2 -->
+            <div class="card card-step" data-step="02">
+              <div class="card-top">
+                <div class="icon-box icon-green" aria-hidden="true">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                    <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                    <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                  </svg>
+                </div>
+                <span class="card-step-num">02</span>
+              </div>
+              <h3 class="card-title">TrashNet Dataset</h3>
+              <p class="card-body">
+                The model is trained on TrashNet categories to support reliable waste classification.
+              </p>
+              <div class="card-footer-badge badge-green">
+                <span>5 Waste Classes</span>
+              </div>
+            </div>
+
+            <!-- Step 3 -->
+            <div class="card card-step" data-step="03">
+              <div class="card-top">
+                <div class="icon-box icon-amber" aria-hidden="true">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                    <line x1="8" y1="21" x2="16" y2="21"></line>
+                    <line x1="12" y1="17" x2="12" y2="21"></line>
+                    <path d="M7 9l3 3 5-5"></path>
+                  </svg>
+                </div>
+                <span class="card-step-num">03</span>
+              </div>
+              <h3 class="card-title">Actuation-Ready Output</h3>
+              <p class="card-body">
+                Classification results are passed directly to the sorting mechanism for immediate physical action.
+              </p>
+              <div class="card-footer-badge badge-amber">
+                <span>Hardware Integration</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- DEMO (classifier widget)                                     -->
+      <!-- ============================================================ -->
+      <section id="demo">
+        <div class="demo-container">
+          <span class="feature-badge" aria-label="Live demo badge">
+            <span class="dot" aria-hidden="true"></span>
+            Live Demo
+          </span>
+
+          <h2>See It in Action</h2>
+
+          <p>
+            Drop a photo (or short video) of a single item — TraceSort will instantly classify it into one of
+            five categories: <strong>Glass</strong>, <strong>Metal</strong>, <strong>Paper</strong>,
+            <strong>Plastic</strong>, or <strong>Waste</strong>.
+          </p>
+
+          <div class="demo-actions">
+            <button
+              type="button"
+              class="btn-primary btn-blue btn-primary-enhanced"
+              id="launchDemoBtn"
+              aria-expanded="false"
+              aria-controls="classifier"
+            >
+              Launch Demo
+              <span class="btn-icon" aria-hidden="true">→</span>
+            </button>
+          </div>
+
+          <!-- Classifier widget (hidden until Launch Demo) -->
+          <div id="classifier" class="classifier" hidden>
+            <!-- API key panel — rides the classifier's own hidden toggle -->
+            <div class="api-key-panel" id="apiKeyPanel">
+              <label for="apiKeyInput">API key</label>
+              <input
+                id="apiKeyInput"
+                type="password"
+                autocomplete="off"
+                spellcheck="false"
+                placeholder="swr_..."
+              />
+              <button type="button" class="btn-secondary btn-secondary-dark" id="setKeyBtn">
+                Set key
+              </button>
+              <p id="apiKeyNote" role="status" aria-live="polite"></p>
+            </div>
+
+            <div class="classifier-grid">
+              <div class="upload-panel">
+                <label for="fileInput" class="upload-zone" id="uploadZone">
+                  <input
+                    type="file"
+                    id="fileInput"
+                    accept="image/*,video/mp4,video/quicktime,video/x-matroska"
+                    hidden
+                  />
+                  <img id="previewImg" class="preview-media" alt="Selected image preview" hidden />
+                  <video id="previewVideo" class="preview-media" controls muted playsinline hidden></video>
+
+                  <div class="upload-placeholder" id="uploadPlaceholder">
+                    <span class="upload-icon" aria-hidden="true">⬆</span>
+                    <span>Drag an image or video here or click to browse</span>
+                    <small>PNG, JPG, MP4, MOV, MKV (max 150 MB)</small>
+                  </div>
+                </label>
+
+                <div class="classifier-actions">
+                  <button type="button" class="btn-primary btn-blue" id="classifyBtn" disabled>
+                    Classify
+                  </button>
+                  <button type="button" class="btn-secondary btn-secondary-dark" id="resetBtn" disabled>
+                    Clear
+                  </button>
+                </div>
+              </div>
+
+              <div class="result-panel">
+                <div class="result-empty" id="resultEmpty">The result will appear here.</div>
+
+                <div class="result-loading" id="resultLoading" hidden>
+                  <span class="spinner" aria-hidden="true"></span>
+                  <span id="loadingText">Analyzing…</span>
+                </div>
+
+                <div class="result-error" id="resultError" role="alert" hidden></div>
+
+                <div class="result-content" id="resultContent" hidden>
+                  <div class="top-class">
+                    <span class="top-label">Predicted class</span>
+                    <span class="top-value" id="topClass">—</span>
+                  </div>
+
+                  <div class="meta-row">
+                    <div class="meta-item" id="confidenceWrap" hidden>
+                      <span class="meta-label">Confidence</span>
+                      <span class="meta-value" id="confidenceValue">—</span>
+                    </div>
+                    <div class="meta-item" id="recordWrap" hidden>
+                      <span class="meta-label">Record ID</span>
+                      <span class="meta-value" id="recordId">—</span>
+                    </div>
+                  </div>
+
+                  <div class="scores" id="scores"></div>
+
+                  <p id="resultMeta" class="result-meta"></p>
+                  <div id="timeline" class="timeline" hidden></div>
+                </div>
+
+                <!-- feedbackWrap placed outside resultContent to survive innerHTML rewrites -->
+                <div class="feedback" id="feedbackWrap" hidden>
+                  <span class="meta-label">Wrong prediction? Correct it</span>
+                  <div class="feedback-row">
+                    <label class="sr-only" for="feedbackClass">Correct class</label>
+                    <select class="feedback-select" id="feedbackClass"></select>
+                    <button type="button" class="btn-primary btn-secondary-dark btn-small" id="feedbackBtn">
+                      Send feedback
+                    </button>
+                  </div>
+                  <p class="feedback-note" id="feedbackNote" role="status" aria-live="polite"></p>
+                </div>
+              </div>
+            </div>
+
+            <div class="history-panel">
+              <div class="history-head">
+                <h3>Recent classifications</h3>
+                <div class="history-actions">
+                  <button type="button" class="btn-secondary btn-secondary-dark btn-small" id="refreshHistoryBtn">
+                    Refresh history
+                  </button>
+                  <button type="button" class="btn-secondary btn-secondary-dark btn-small" id="clearHistoryBtn">
+                    Clear All
+                  </button>
+                </div>
+              </div>
+
+              <div class="history-body" id="historyBody">
+                <p class="history-empty" id="historyEmpty">No history loaded yet.</p>
+                <ul class="history-list" id="historyList" hidden></ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- CONTACT                                                      -->
+      <!-- ============================================================ -->
+      <section id="contact">
+        <div class="contact-container">
+          <span class="eyebrow">Open Source</span>
+          <h2>Explore, Fork, and Contribute</h2>
+          <p class="contact-text">
+            The full source code — model weights, training scripts, and the Gradio demo — is publicly
+            available on GitHub. This project was built as part of an AI Challenge by a team of engineers
+            committed to making recycling smarter.
+          </p>
+
+          <div class="contact-buttons">
+            <a href="https://github.com" target="_blank" rel="noopener noreferrer" class="btn-primary">
+              View on GitHub
+            </a>
+            <a href="#" class="btn-secondary">Read the Docs</a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- FOOTER -->
+    <footer class="site-footer">
+      <p>&copy; 2026 TraceSort — AI Waste Sorting Robot</p>
+    </footer>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>

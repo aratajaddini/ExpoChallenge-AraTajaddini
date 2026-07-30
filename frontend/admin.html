@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Key Admin — Smart Waste Robot</title>
+<style>
+  :root { --bg:#eef2f4; --card:#fff; --line:#d6dee2; --ink:#1b2a32; --muted:#5f7480; --accent:#2b8ae0; --err:#c0392b; --ok:#1e8e5a; }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:2rem 1rem; background:var(--bg); color:var(--ink);
+         font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+  main { max-width:860px; margin:0 auto; display:grid; gap:1.25rem; }
+  h1 { font-size:1.4rem; margin:0; }
+  h2 { font-size:1rem; margin:0 0 .75rem; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:1.1rem; }
+  .warn { margin:0; color:var(--muted); font-size:.85rem; }
+  .row { display:flex; gap:.6rem; align-items:center; flex-wrap:wrap; }
+  .row.between { justify-content:space-between; }
+  label { display:block; font-size:.8rem; color:var(--muted); margin-bottom:.35rem; }
+  input[type=text], input[type=password], input[type=number] {
+    flex:1 1 12rem; min-width:8rem; padding:.55rem .7rem; border:1px solid var(--line);
+    border-radius:8px; font:inherit; background:#fbfdfe; color:var(--ink); }
+  input[type=number] { flex:0 0 5.5rem; }
+  input:focus-visible, button:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  button { padding:.55rem 1rem; border:0; border-radius:8px; background:var(--accent);
+           color:#fff; font:inherit; cursor:pointer; }
+  button.ghost { background:transparent; border:1px solid var(--line); color:var(--ink); }
+  button.danger { background:transparent; border:1px solid var(--err); color:var(--err); padding:.3rem .6rem; font-size:.8rem; }
+  .note { margin:.6rem 0 0; font-size:.82rem; color:var(--muted); min-height:1.2em; }
+  .note[data-state=ok] { color:var(--ok); }
+  .note[data-state=err] { color:var(--err); }
+  .minted { margin-top:.9rem; padding:.8rem; border:1px dashed var(--accent); border-radius:8px; }
+  .minted code { display:block; word-break:break-all; font-size:.9rem; margin-bottom:.6rem; }
+  table { width:100%; border-collapse:collapse; font-size:.85rem; }
+  th, td { text-align:left; padding:.5rem .4rem; border-bottom:1px solid var(--line); }
+  th { color:var(--muted); font-weight:600; }
+  .dead { color:var(--muted); text-decoration:line-through; }
+  .inline { display:flex; align-items:center; gap:.35rem; margin:0; }
+</style>
+</head>
+<body>
+<main>
+  <h1>API Key Admin</h1>
+  <p class="warn">Local tool. The admin key is kept in this browser's localStorage — run it only on your own machine.</p>
+
+  <section class="card">
+    <label for="adminKey">Admin key (from <code>.env</code>)</label>
+    <div class="row">
+      <input id="adminKey" type="password" autocomplete="off" placeholder="SWR_API_KEY" />
+      <button id="saveAdmin" type="button">Save</button>
+    </div>
+    <p id="adminNote" class="note"></p>
+  </section>
+
+  <section class="card">
+    <h2>Mint shift key</h2>
+    <div class="row">
+      <input id="label" type="text" placeholder="jury-demo" />
+      <input id="hours" type="number" min="1" max="72" value="8" aria-label="Valid hours" />
+      <button id="mintBtn" type="button">Mint</button>
+    </div>
+    <div id="minted" class="minted" hidden>
+      <code id="rawKey"></code>
+      <button id="copyBtn" type="button" class="ghost">Copy</button>
+      <p class="note">Shown once. Copy it before leaving this page.</p>
+    </div>
+    <p id="mintNote" class="note"></p>
+  </section>
+
+  <section class="card">
+    <div class="row between">
+      <h2>Issued keys</h2>
+      <div class="row">
+        <label class="inline"><input id="activeOnly" type="checkbox" /> active only</label>
+        <button id="reloadBtn" type="button" class="ghost">Reload</button>
+      </div>
+    </div>
+    <table>
+      <thead><tr><th>#</th><th>Label</th><th>Preview</th><th>Expires</th><th>Last used</th><th></th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <p id="listNote" class="note"></p>
+  </section>
+</main>
+
+<script>
+const API_BASE = "http://127.0.0.1:8000";
+const STORE = "swr_admin_key";
+const $ = (id) => document.getElementById(id);
+let adminKey = localStorage.getItem(STORE) || "";
+
+function note(el, msg, state) {
+  el.textContent = msg;
+  if (state) el.dataset.state = state; else delete el.dataset.state;
+}
+
+function headers(json) {
+  const h = { "X-API-Key": adminKey };
+  if (json) h["Content-Type"] = "application/json";
+  return h;
+}
+
+async function call(path, options = {}) {
+  if (!adminKey) throw new Error("Set the admin key first.");
+  const res = await fetch(API_BASE + path, options);
+  if (res.status === 401) throw new Error("Admin key rejected (401).");
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.detail || `Request failed (${res.status}).`);
+  }
+  return res.status === 204 ? null : res.json();
+}
+
+function fmt(iso) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  return isNaN(d) ? iso : d.toLocaleString();
+}
+
+async function loadKeys() {
+  const query = $("activeOnly").checked ? "?active_only=true" : "";
+  const body = $("rows");
+  try {
+    const items = await call("/admin/keys" + query, { headers: headers(false) });
+    body.replaceChildren();
+    if (!items.length) { note($("listNote"), "No keys yet."); return; }
+    for (const k of items) {
+      const expired = new Date(k.expires_at) <= new Date();
+      const tr = document.createElement("tr");
+      if (k.revoked || expired) tr.className = "dead";
+      for (const text of [k.id, k.label, k.preview, fmt(k.expires_at), fmt(k.last_used_at)]) {
+        const td = document.createElement("td");
+        td.textContent = text;
+        tr.appendChild(td);
+      }
+      const actions = document.createElement("td");
+      if (!k.revoked) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "danger";
+        btn.textContent = "Revoke";
+        btn.addEventListener("click", () => revoke(k.id, k.label));
+        actions.appendChild(btn);
+      }
+      tr.appendChild(actions);
+      body.appendChild(tr);
+    }
+    note($("listNote"), `${items.length} key(s).`);
+  } catch (err) {
+    note($("listNote"), err.message, "err");
+  }
+}
+
+async function revoke(id, label) {
+  if (!confirm(`Revoke key #${id} (${label})? Clients using it stop working immediately.`)) return;
+  try {
+    await call(`/admin/keys/${id}`, { method: "DELETE", headers: headers(false) });
+    note($("listNote"), `Key #${id} revoked.`, "ok");
+    loadKeys();
+  } catch (err) {
+    note($("listNote"), err.message, "err");
+  }
+}
+
+$("saveAdmin").addEventListener("click", () => {
+  adminKey = $("adminKey").value.trim();
+  if (!adminKey) { localStorage.removeItem(STORE); note($("adminNote"), "Cleared."); return; }
+  localStorage.setItem(STORE, adminKey);
+  note($("adminNote"), "✓ Saved for this browser.", "ok");
+  loadKeys();
+});
+
+$("mintBtn").addEventListener("click", async () => {
+  const label = $("label").value.trim();
+  if (!label) { note($("mintNote"), "Label is required.", "err"); return; }
+  try {
+    const data = await call("/admin/keys", {
+      method: "POST",
+      headers: headers(true),
+      body: JSON.stringify({ label, hours: Number($("hours").value) || 8 }),
+    });
+    $("rawKey").textContent = data.api_key;
+    $("minted").hidden = false;
+    note($("mintNote"), `Valid until ${fmt(data.expires_at)}.`, "ok");
+    loadKeys();
+  } catch (err) {
+    $("minted").hidden = true;
+    note($("mintNote"), err.message, "err");
+  }
+});
+
+$("copyBtn").addEventListener("click", async () => {
+  await navigator.clipboard.writeText($("rawKey").textContent);
+  note($("mintNote"), "✓ Copied.", "ok");
+});
+
+$("reloadBtn").addEventListener("click", loadKeys);
+$("activeOnly").addEventListener("change", loadKeys);
+
+if (adminKey) {
+  $("adminKey").value = adminKey;
+  note($("adminNote"), "✓ Key loaded from this browser.", "ok");
+  loadKeys();
+}
+</script>
+</body>
+</html>
