@@ -10,33 +10,27 @@
 
   <!-- SEO -->
   <meta name="robots" content="index,follow,max-image-preview:large" />
-  <link rel="canonical" href="https://example.com/" />
 
   <!-- Theme color (browsers / PWA feel) -->
   <meta name="theme-color" content="#0B0F14" />
 
-  <!-- Open Graph -->
+  <!-- Open Graph (basic, no placeholder URL) -->
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="TraceSort" />
   <meta property="og:title" content="TraceSort – AI Waste Sorting Robot" />
   <meta property="og:description" content="TraceSort uses YOLOv8 and AI to classify waste materials in milliseconds." />
-  <meta property="og:url" content="https://example.com/" />
-  <meta property="og:image" content="https://example.com/assets/og-cover.png" />
-  <meta property="og:image:width" content="1200" />
-  <meta property="og:image:height" content="630" />
 
-  <!-- Twitter Card -->
+  <!-- Twitter Card (basic, no placeholder URL) -->
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="TraceSort – AI Waste Sorting Robot" />
   <meta name="twitter:description" content="TraceSort uses YOLOv8 and AI to classify waste materials in milliseconds." />
-  <meta name="twitter:image" content="https://example.com/assets/og-cover.png" />
 
   <!-- Favicon (preserved) -->
   <link rel="icon" type="image/png" sizes="32x32" href="./assets/favicon-32.png" />
   <link rel="icon" type="image/png" sizes="48x48" href="./assets/favicon-48.png" />
   <link rel="apple-touch-icon" href="./assets/favicon-180.png" />
 
-  <!-- Google Fonts (preserved) -->
+  <!-- Google Fonts (preserved) – fallback to system fonts if offline -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link
@@ -389,6 +383,40 @@
         </div>
       </section>
     </main>
+
+    <!-- ============================================================ -->
+    <!-- CHATBOT WIDGET — inserted between </main> and <footer>       -->
+    <!-- ============================================================ -->
+    <section
+      id="chatbotWidget"
+      class="chatbot-widget"
+      aria-label="TraceSort assistant"
+    >
+      <button
+        id="chatToggle"
+        class="chat-toggle"
+        aria-expanded="false"
+        aria-controls="chatPanel"
+      >
+        Ask the robot
+      </button>
+
+      <div id="chatPanel" class="chat-panel" role="dialog" aria-label="Analytics chat" hidden>
+        <div id="chatLog" class="chat-log" aria-live="polite"></div>
+        <form id="chatForm" class="chat-form">
+          <label for="chatInput" class="sr-only">Your question</label>
+          <input
+            id="chatInput"
+            class="chat-input"
+            type="text"
+            placeholder="How many plastic items?"
+            autocomplete="off"
+            required
+          />
+          <button type="submit" class="chat-send">Send</button>
+        </form>
+      </div>
+    </section>
 
     <!-- FOOTER -->
     <footer class="site-footer">

@@ -1,9 +1,9 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Key Admin — Smart Waste Robot</title>
+<title>Key Admin â€” Smart Waste Robot</title>
 <style>
   :root { --bg:#eef2f4; --card:#fff; --line:#d6dee2; --ink:#1b2a32; --muted:#5f7480; --accent:#2b8ae0; --err:#c0392b; --ok:#1e8e5a; }
   * { box-sizing:border-box; }
@@ -41,7 +41,7 @@
 <body>
 <main>
   <h1>API Key Admin</h1>
-  <p class="warn">Local tool. The admin key is kept in this browser's localStorage — run it only on your own machine.</p>
+  <p class="warn">Local tool. The admin key is kept in this browser's sessionStorage â€” run it only on your own machine.</p>
 
   <section class="card">
     <label for="adminKey">Admin key (from <code>.env</code>)</label>
@@ -84,10 +84,10 @@
 </main>
 
 <script>
-const API_BASE = "http://127.0.0.1:8000";
+const API_BASE = "";   // same origin
 const STORE = "swr_admin_key";
 const $ = (id) => document.getElementById(id);
-let adminKey = localStorage.getItem(STORE) || "";
+let adminKey = sessionStorage.getItem(STORE) || "";
 
 function note(el, msg, state) {
   el.textContent = msg;
@@ -112,7 +112,7 @@ async function call(path, options = {}) {
 }
 
 function fmt(iso) {
-  if (!iso) return "—";
+  if (!iso) return "â€”";
   const d = new Date(iso);
   return isNaN(d) ? iso : d.toLocaleString();
 }
@@ -164,9 +164,9 @@ async function revoke(id, label) {
 
 $("saveAdmin").addEventListener("click", () => {
   adminKey = $("adminKey").value.trim();
-  if (!adminKey) { localStorage.removeItem(STORE); note($("adminNote"), "Cleared."); return; }
-  localStorage.setItem(STORE, adminKey);
-  note($("adminNote"), "✓ Saved for this browser.", "ok");
+  if (!adminKey) { sessionStorage.removeItem(STORE); note($("adminNote"), "Cleared."); return; }
+  sessionStorage.setItem(STORE, adminKey);
+  note($("adminNote"), "âœ“ Saved for this browser.", "ok");
   loadKeys();
 });
 
@@ -191,7 +191,7 @@ $("mintBtn").addEventListener("click", async () => {
 
 $("copyBtn").addEventListener("click", async () => {
   await navigator.clipboard.writeText($("rawKey").textContent);
-  note($("mintNote"), "✓ Copied.", "ok");
+  note($("mintNote"), "âœ“ Copied.", "ok");
 });
 
 $("reloadBtn").addEventListener("click", loadKeys);
@@ -199,7 +199,7 @@ $("activeOnly").addEventListener("change", loadKeys);
 
 if (adminKey) {
   $("adminKey").value = adminKey;
-  note($("adminNote"), "✓ Key loaded from this browser.", "ok");
+  note($("adminNote"), "âœ“ Key loaded from this browser.", "ok");
   loadKeys();
 }
 </script>

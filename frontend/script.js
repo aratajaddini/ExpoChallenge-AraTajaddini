@@ -8,7 +8,7 @@
     const VIDEO_EXT = /\.(mp4|mov|mkv|avi|webm)$/i;
 
     const CONFIG = {
-        API_BASE: window.__API_BASE__ || 'http://127.0.0.1:8000',
+        API_BASE: window.__API_BASE__ || '',   // ✅ empty = same origin
         API_KEY: '',
         IMAGE_TIMEOUT_MS: 30000,
         VIDEO_TIMEOUT_MS: 300000,
@@ -26,6 +26,8 @@
     function storeKey(key) {
         try {
             STORAGE.setItem(STORAGE_KEY, key);
+            // ✅ Security reminder: visible to any script on the page
+            console.warn('API key stored in sessionStorage. This is safe for demo, but not for production.');
         } catch { /* non-fatal */ }
     }
 
@@ -249,7 +251,22 @@
     }
 
     // ============================================================
-    // 2. HAMBURGER MENU
+    // 2. SPLASH FALLBACK – auto‑hide after 10 seconds if user didn't click
+    // ============================================================
+    setTimeout(() => {
+        const splashEl = document.getElementById('splash');
+        const mainEl = document.getElementById('main-content');
+        if (splashEl && !splashEl.classList.contains('exit')) {
+            splashEl.classList.add('exit');
+            setTimeout(() => {
+                splashEl.style.display = 'none';
+                if (mainEl) mainEl.classList.add('visible');
+            }, 1000);
+        }
+    }, 10000); // 10 seconds
+
+    // ============================================================
+    // 3. HAMBURGER MENU
     // ============================================================
     if (toggle && navLinks) {
         toggle.addEventListener('click', function () {
@@ -274,7 +291,7 @@
     }
 
     // ============================================================
-    // 3. SMOOTH SCROLL
+    // 4. SMOOTH SCROLL
     // ============================================================
     document.querySelectorAll('a[href^="#"]').forEach(function (anchor) {
         anchor.addEventListener('click', function (e) {
@@ -290,7 +307,7 @@
     });
 
     // ============================================================
-    // 4. LAUNCH DEMO – show/hide classifier and handle API key
+    // 5. LAUNCH DEMO – show/hide classifier and handle API key
     // ============================================================
     if (launchBtn && classifier) {
         launchBtn.addEventListener('click', async () => {
@@ -316,7 +333,7 @@
     }
 
     // ============================================================
-    // 5. FILE UPLOAD & PREVIEW
+    // 6. FILE UPLOAD & PREVIEW
     // ============================================================
     const hasClassifier = fileInput && uploadZone && classifyBtn && resetBtn &&
                           previewImg && resultEmpty && resultContent;
@@ -424,7 +441,7 @@
     window.addEventListener('beforeunload', releasePreviewUrl);
 
     // ============================================================
-    // 6. CLASSIFY
+    // 7. CLASSIFY
     // ============================================================
     async function classify() {
         if (!selectedFile) return;
@@ -471,7 +488,7 @@
     }
 
     // ============================================================
-    // HTTP error mapping
+    // 8. HTTP error mapping
     // ============================================================
     async function handleHttpError(res, isVideo) {
         let detail = '';
@@ -512,7 +529,7 @@
     }
 
     // ============================================================
-    // Rendering (dynamic class list from server)
+    // 9. RENDERING – DOM-based, safe (no innerHTML with dynamic data)
     // ============================================================
     function renderResult(data) {
         hideAll();
@@ -527,61 +544,161 @@
         const topClass = data.class_name ?? data.top_class ?? (rows[0] ? rows[0][0] : 'unknown');
         const topScore = data.confidence ?? (rows[0] ? rows[0][1] : 0);
 
-        resultContent.innerHTML = `
-            <div class="top-class">
-                <span class="top-label">Detected</span>
-                <span class="top-value">${prettyLabel(topClass)}</span>
-            </div>
-            <div class="meta-row">
-                <div class="meta-item">
-                    <span class="meta-label">Confidence</span>
-                    <span class="meta-value">${(topScore * 100).toFixed(1)}%</span>
-                </div>
-                ${data.inference_ms != null ? `
-                <div class="meta-item">
-                    <span class="meta-label">Inference</span>
-                    <span class="meta-value">${Math.round(data.inference_ms)} ms</span>
-                </div>` : ''}
-            </div>
-            <div class="scores">
-                ${rows.map(([name, score]) => {
-                    const pct = (score * 100).toFixed(1);
-                    const isTop = name === topClass ? ' is-top' : '';
-                    return `
-                    <div class="score-row${isTop}">
-                        <div class="score-head">
-                            <span>${prettyLabel(name)}</span>
-                            <span>${pct}%</span>
-                        </div>
-                        <div class="score-track" role="progressbar" aria-label="${prettyLabel(name)} confidence" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100">
-                            <div class="score-fill" style="width:${pct}%"></div>
-                        </div>
-                    </div>`;
-                }).join('')}
-            </div>`;
+        // Clear previous content
+        resultContent.innerHTML = '';
 
-        lastPredictionId = data.id ?? null;
-        const wrap = document.getElementById('feedbackWrap');
-        const note = document.getElementById('feedbackNote');
-        if (note) {
-            note.textContent = '';
-            note.className = 'feedback-note';
+        // --- Top class ---
+        const topDiv = document.createElement('div');
+        topDiv.className = 'top-class';
+        const label = document.createElement('span');
+        label.className = 'top-label';
+        label.textContent = 'Detected';
+        const value = document.createElement('span');
+        value.className = 'top-value';
+        value.textContent = prettyLabel(topClass);
+        topDiv.append(label, value);
+        resultContent.appendChild(topDiv);
+
+        // --- Meta row ---
+        const metaRow = document.createElement('div');
+        metaRow.className = 'meta-row';
+
+        // Confidence
+        const confItem = document.createElement('div');
+        confItem.className = 'meta-item';
+        const confLabel = document.createElement('span');
+        confLabel.className = 'meta-label';
+        confLabel.textContent = 'Confidence';
+        const confVal = document.createElement('span');
+        confVal.className = 'meta-value';
+        confVal.textContent = (topScore * 100).toFixed(1) + '%';
+        confItem.append(confLabel, confVal);
+        metaRow.appendChild(confItem);
+
+        // Inference time if available
+        if (data.inference_ms != null) {
+            const timeItem = document.createElement('div');
+            timeItem.className = 'meta-item';
+            const timeLabel = document.createElement('span');
+            timeLabel.className = 'meta-label';
+            timeLabel.textContent = 'Inference';
+            const timeVal = document.createElement('span');
+            timeVal.className = 'meta-value';
+            timeVal.textContent = Math.round(data.inference_ms) + ' ms';
+            timeItem.append(timeLabel, timeVal);
+            metaRow.appendChild(timeItem);
         }
-        if (wrap) {
-            if (lastPredictionId !== null && rows.length) {
-                const classNames = modelClasses.length ? modelClasses : rows.map(([name]) => name);
-                buildFeedbackOptions(classNames, topClass);
-                const fbBtn = document.getElementById('feedbackBtn');
-                if (fbBtn) fbBtn.disabled = false;
-                wrap.hidden = false;
-            } else {
-                wrap.hidden = true;
+        resultContent.appendChild(metaRow);
+
+        // --- Scores ---
+        const scoresDiv = document.createElement('div');
+        scoresDiv.className = 'scores';
+        rows.forEach(([name, score]) => {
+            const pct = (score * 100).toFixed(1);
+            const isTop = name === topClass;
+            const rowDiv = document.createElement('div');
+            rowDiv.className = 'score-row' + (isTop ? ' is-top' : '');
+            const head = document.createElement('div');
+            head.className = 'score-head';
+            const nameSpan = document.createElement('span');
+            nameSpan.textContent = prettyLabel(name);
+            const pctSpan = document.createElement('span');
+            pctSpan.textContent = pct + '%';
+            head.append(nameSpan, pctSpan);
+            const track = document.createElement('div');
+            track.className = 'score-track';
+            track.setAttribute('role', 'progressbar');
+            track.setAttribute('aria-label', prettyLabel(name) + ' confidence');
+            track.setAttribute('aria-valuenow', pct);
+            track.setAttribute('aria-valuemin', '0');
+            track.setAttribute('aria-valuemax', '100');
+            const fill = document.createElement('div');
+            fill.className = 'score-fill';
+            fill.style.width = pct + '%';
+            track.appendChild(fill);
+            rowDiv.append(head, track);
+            scoresDiv.appendChild(rowDiv);
+        });
+        resultContent.appendChild(scoresDiv);
+
+        // --- Feedback ---
+        // Re-create the feedback container with the same ID and structure
+        const fbWrap = document.createElement('div');
+        fbWrap.id = 'feedbackWrap';
+        fbWrap.className = 'feedback';
+        fbWrap.hidden = true;
+
+        const fbMeta = document.createElement('span');
+        fbMeta.className = 'meta-label';
+        fbMeta.textContent = 'Wrong prediction? Correct it';
+        fbWrap.appendChild(fbMeta);
+
+        const fbRow = document.createElement('div');
+        fbRow.className = 'feedback-row';
+
+        const fbLabel = document.createElement('label');
+        fbLabel.className = 'sr-only';
+        fbLabel.setAttribute('for', 'feedbackClass');
+        fbLabel.textContent = 'Correct class';
+        fbRow.appendChild(fbLabel);
+
+        const fbSelect = document.createElement('select');
+        fbSelect.className = 'feedback-select';
+        fbSelect.id = 'feedbackClass';
+        fbRow.appendChild(fbSelect);
+
+        const fbBtn = document.createElement('button');
+        fbBtn.type = 'button';
+        fbBtn.className = 'btn-primary btn-secondary-dark btn-small';
+        fbBtn.id = 'feedbackBtn';
+        fbBtn.textContent = 'Send feedback';
+        fbRow.appendChild(fbBtn);
+
+        fbWrap.appendChild(fbRow);
+
+        const fbNote = document.createElement('p');
+        fbNote.className = 'feedback-note';
+        fbNote.id = 'feedbackNote';
+        fbNote.setAttribute('role', 'status');
+        fbNote.setAttribute('aria-live', 'polite');
+        fbWrap.appendChild(fbNote);
+
+        resultContent.appendChild(fbWrap);
+
+        // Store prediction ID and update feedback state
+        lastPredictionId = data.id ?? null;
+        if (lastPredictionId !== null && rows.length) {
+            const classNames = modelClasses.length ? modelClasses : rows.map(([name]) => name);
+            // Build options using the new select
+            const select = document.getElementById('feedbackClass');
+            if (select) {
+                select.innerHTML = '';
+                classNames.forEach(name => {
+                    const opt = document.createElement('option');
+                    opt.value = name;
+                    opt.textContent = prettyLabel(name);
+                    opt.selected = name === topClass;
+                    select.appendChild(opt);
+                });
             }
+            const fbBtnNew = document.getElementById('feedbackBtn');
+            if (fbBtnNew) fbBtnNew.disabled = false;
+            fbWrap.hidden = false;
+        } else {
+            fbWrap.hidden = true;
+        }
+
+        // Re-bind feedback button event (since we recreated it)
+        const newFeedbackBtn = document.getElementById('feedbackBtn');
+        if (newFeedbackBtn) {
+            // Remove any existing listeners (we only have one, but safe)
+            // We'll just assign a new click handler
+            newFeedbackBtn.onclick = sendFeedback;
         }
     }
 
     // ============================================================
-    // Feedback
+    // 10. Feedback
     // ============================================================
     async function sendFeedback() {
         const btn = document.getElementById('feedbackBtn');
@@ -612,10 +729,8 @@
         }
     }
 
-    if (feedbackBtn) feedbackBtn.addEventListener('click', sendFeedback);
-
     // ============================================================
-    // History
+    // 11. History
     // ============================================================
     async function loadHistory() {
         if (!historyList || !historyEmpty) return;
@@ -756,4 +871,54 @@
             await loadClasses();
         }
     })();
+})();
+
+// ──────────────────────────────────────────────────────────────
+//  CHATBOT WIDGET – appended per user request
+// ──────────────────────────────────────────────────────────────
+(function initChatbot() {
+  const toggle = document.getElementById("chatToggle");
+  const panel = document.getElementById("chatPanel");
+  const form = document.getElementById("chatForm");
+  const input = document.getElementById("chatInput");
+  const log = document.getElementById("chatLog");
+
+  if (!toggle || !panel || !form) return;
+
+  toggle.addEventListener("click", () => {
+    const open = panel.hasAttribute("hidden");
+    panel.toggleAttribute("hidden", !open);
+    toggle.setAttribute("aria-expanded", String(open));
+    if (open) input.focus();
+  });
+
+  function append(text, who) {
+    const line = document.createElement("div");
+    line.className = `chat-msg chat-msg--${who}`;
+    line.textContent = text;
+    log.appendChild(line);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const message = input.value.trim();
+    if (!message) return;
+
+    append(message, "user");
+    input.value = "";
+
+    try {
+      const res = await fetch("/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      append(data.reply, "bot");
+    } catch (err) {
+      append("Sorry, I couldn't reach the analytics service.", "bot");
+    }
+  });
 })();
