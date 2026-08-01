@@ -1,4 +1,5 @@
 import os
+import sys
 import time
 import json
 import logging
@@ -9,12 +10,39 @@ import pandas as pd
 import gradio as gr
 from ultralytics import YOLO
 import Arduino
+import webbrowser
+from threading import Timer
+import io
+import webview
+import tempfile
+import urllib.request
+import yaml
+import zipfile
+import glob
+
+VAL_ZIP_URL = "https://github.com/abbas-pt/ExpoChallenge_AbbasLotfi/releases/download/v1.0.0/val.zip"
+
+if sys.stdout is None:
+    sys.stdout = io.StringIO()
+if sys.stderr is None:
+    sys.stderr = io.StringIO()
+
+def get_resource_path(relative_path):
+   
+    if hasattr(sys, '_MEIPASS'):
+       
+        return os.path.join(sys._MEIPASS, relative_path)
+    
+    return os.path.join(os.path.abspath("."), relative_path)
 
 
+
+arduino_log_out=[]
+payload=[]
 
 CONVEYOR_DIRECTION = "DOWNWARD"
 
-CONVEYOR_STATUS=True
+
 # Disable Gradio analytics
 os.environ["GRADIO_ANALYTICS_ENABLED"] = "False"
 
@@ -22,14 +50,22 @@ os.environ["GRADIO_ANALYTICS_ENABLED"] = "False"
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 # 1. Startup paths verification
-MODEL_PATH = "best_abbas.pt"
-DATA_YAML_PATH = "data.yaml"  # for validating model accuracy on dashboard
+MODEL_PATH = get_resource_path("create_exe_file/best_abbas.pt")
+model = YOLO(MODEL_PATH)
+
+DATA_YAML_PATH =get_resource_path("create_exe_file/data1.yaml")  # for validating model accuracy on dashboard
 
 if not os.path.exists(MODEL_PATH):
     logging.warning(f"⚠️ Model file not found at '{MODEL_PATH}'. Ensure correct path before running detection.")
 
 # 2. Hardware connection
-arduino, status_msg = Arduino.connect()
+try:
+    arduino, status_msg = Arduino.connect()
+
+
+except Exception as e:
+    print(f"Warning: Arduino not connected or port not found ({e}). Running in offline mode.")
+
 
 # 3. Model & CLAHE setup
 model = YOLO(MODEL_PATH) if os.path.exists(MODEL_PATH) else None
@@ -84,7 +120,7 @@ WASTE_VALUES = {
     "Cigarette": 0.00, "Other litter": 0.00, "Unlabeled litter": 0.00,
 }
 
-BIN_CAPACITIES = {k: 3 for k in CLASS_MAPPING.keys()}
+BIN_CAPACITIES = {k: 6 for k in CLASS_MAPPING.keys()}
 
 TRIGGER_LINE_RATIO = 0.50
 TRIGGER_TOLERANCE = 25
@@ -168,9 +204,10 @@ def extract_object_orientation(frame: np.ndarray, bbox: tuple) -> float:
     blur = cv2.GaussianBlur(gray, (5, 5), 0)
 
     _, thresh = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+
     contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-    if not contours: # Supporter For contours
+    if not contours:  # Supporter For contours
         edges = cv2.Canny(blur, 50, 150)
         contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
@@ -178,13 +215,38 @@ def extract_object_orientation(frame: np.ndarray, bbox: tuple) -> float:
         c = max(contours, key=cv2.contourArea)
         if cv2.contourArea(c) > 20:
             rect = cv2.minAreaRect(c)
-            angle = rect[-1]
-           
-            if USES_LEGACY_ANGLE_CONVENTION and angle < -45:
-                angle += 90.0
+            (cx, cy), (width, height), angle = rect 
+
+            if USES_LEGACY_ANGLE_CONVENTION:
+               
+                if angle < -45:
+                    angle += 90.0
+            else:
+              
+                if width < height:
+                    angle -= 90.0
+
             return float(angle)
 
     return 0.0
+
+    # contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    # if not contours: # Supporter For contours
+    #     edges = cv2.Canny(blur, 50, 150)
+    #     contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    # if contours:
+    #     c = max(contours, key=cv2.contourArea)
+    #     if cv2.contourArea(c) > 20:
+    #         rect = cv2.minAreaRect(c)
+    #         angle = rect[-1]
+           
+    #         if USES_LEGACY_ANGLE_CONVENTION and angle < -45:
+    #             angle += 90.0
+    #         return float(angle)
+
+    # return 0.0
 
 
 def cleanup_tracking_memory(current_time: float, max_age_seconds: float = 30.0):
@@ -199,31 +261,31 @@ def cleanup_tracking_memory(current_time: float, max_age_seconds: float = 30.0):
 
 def calculate_kinematics_and_send(obj, frame, frame_width, frame_height):
 
-    cx, cy = obj["center_x"], obj["center_y"]
+    cx, cy = obj["center_x"], obj["center_y"] # object x,y position in picture
 
   
 
 
-    xw_mm = (cx - (frame_width / 2)) * SCALE_FACTOR_MM
-    zw_mm = -150.0
+    xw_mm = (cx - (frame_width / 2)) * SCALE_FACTOR_MM # convert pixles to mm
+    zw_mm = -150.0 #mm
 
 
-    trigger_y_px = int(frame_height * TRIGGER_LINE_RATIO)
+    trigger_y_px = int(frame_height * TRIGGER_LINE_RATIO) # trigger line position on picture(pixle)
     
     if CONVEYOR_DIRECTION == "UPWARD":
    
-        delta_y_px = trigger_y_px - cy
+        delta_y_px = trigger_y_px - cy # object center_y distance untill triggerline
     else:
        
         delta_y_px = cy - trigger_y_px
-    delta_y_mm = delta_y_px * SCALE_FACTOR_MM
+    delta_y_mm = delta_y_px * SCALE_FACTOR_MM 
 
 
-    dist_to_grab_mm = GRASPING_ZONE_Y_MM - delta_y_mm
+    dist_to_grab_mm = GRASPING_ZONE_Y_MM - delta_y_mm # object center_y distance untill gripper 
 
 
     if CONVEYOR_SPEED_MM_S > 0:
-        time_to_grab_ms = int((dist_to_grab_mm / CONVEYOR_SPEED_MM_S) * 1000)
+        time_to_grab_ms = int((dist_to_grab_mm / CONVEYOR_SPEED_MM_S) * 1000) 
     else:
         time_to_grab_ms = 0
 
@@ -239,7 +301,7 @@ def calculate_kinematics_and_send(obj, frame, frame_width, frame_height):
         "z": zw_mm,
         "theta": round(angle_deg, 2),
         "ttg_ms": time_to_grab_ms,
-        "ts": int(time.time())
+        "ts": int(time.time()) # Unix Timestamp
     }
     
     payload_json = json.dumps(payload)
@@ -251,8 +313,8 @@ def calculate_kinematics_and_send(obj, frame, frame_width, frame_height):
 
     timestamp = time.strftime("%H:%M:%S")
     formatted_payload_display = (
-        "==================================================\n"
-        f"[{timestamp}] 📡 TRANSMITTING TO ROBOT ARM\n"
+        
+        f"[{timestamp}]  TRANSMITTING TO ROBOT ARM\n"
         "--------------------------------------------------\n"
         f"• Target Class      : {obj['class']} (ID: {obj['track_id']})\n"
         f"• Image Center (px): X={cx}, Y={cy}\n"
@@ -260,10 +322,13 @@ def calculate_kinematics_and_send(obj, frame, frame_width, frame_height):
         f"• World Coords (mm): Xw={xw_mm:+.1f}, Remaining Dist={dist_to_grab_mm:.1f}mm\n"
         f"• Real Angle (deg) : {angle_deg:.1f}°\n"
         f"• Time-to-Grab (ms): {time_to_grab_ms} ms\n"
-        "--------------------------------------------------\n"
-        f'Payload Sent: {payload_json}\n'
-        "=================================================="
+        # "--------------------------------------------------\n"
+        # f'Payload Sent: {payload_json}\n'
+        
     )
+
+    
+
     return formatted_payload_display, payload_json
 
 
@@ -317,13 +382,13 @@ def advanced_robot_logic(detected_objects, frame, frame_width, frame_height):
     global processed_track_ids, log_history, is_conveyor_halted, is_emergency_stopped
 
     if is_emergency_stopped:
-        return None, "🚨 emergency stop active: Operations halted.", "🚨 HARDWARE LOCK (e-stop)"
+        return None, "🚨 emergency stop active: Operations halted.", "🚨 HARDWARE LOCK (e-stop)",None
 
     if is_conveyor_halted:
-        return None, "🚨 CONVEYOR HALTED: Waiting for bin evacuation.", "CONVEYOR STOPPED (HARDWARE LOCK)"
+        return None, "🚨 Conveyor Halted: Waiting for bin evacuation.", "Conveyor Stopped (HardWare Lock)",None
 
     if not detected_objects:
-        return None, "Conveyor belt is empty in this frame.", "Waiting for object..."
+        return None, "Conveyor belt is empty in this frame.", None,None
 
     trigger_y = int(frame_height * TRIGGER_LINE_RATIO)
     valid_objects = []
@@ -335,7 +400,7 @@ def advanced_robot_logic(detected_objects, frame, frame_width, frame_height):
             valid_objects.append(obj)
 
     if not valid_objects:
-        return None, "Monitoring conveyor belt (Waiting for new item)...", "Waiting for object on Trigger Line..."
+        return None, "Monitoring conveyor belt (Waiting for new item)...", None,None
 
     sorted_queue = sorted(
         valid_objects,
@@ -347,16 +412,17 @@ def advanced_robot_logic(detected_objects, frame, frame_width, frame_height):
     processed_track_ids.add(target_object["track_id"])
     timestamp = time.strftime("%H:%M:%S")
 
-    payload_display, _ = calculate_kinematics_and_send(target_object, frame, frame_width, frame_height)
-    print(payload_display)
+    payload_display,payload_json = calculate_kinematics_and_send(target_object, frame, frame_width, frame_height)
+    
+    
+
 
     log_msg = (
         f"[{timestamp}] 🤖 COMMAND: Sort [{target_object['class']}] (ID: {target_object['track_id']})"
         f" ({target_object['confidence']:.1%}) | Center: ({target_object['center_x']}, {target_object['center_y']})"
     )
 
-    return target_object, log_msg, payload_display
-
+    return target_object, log_msg, payload_display,payload_json
 
 def process_single_frame(frame):
     global log_history, prev_frame_time, processed_track_ids, track_last_seen, total_downtime, bin_fill_level, is_emergency_stopped
@@ -369,13 +435,13 @@ def process_single_frame(frame):
         cv2.putText(display_frame, "EMERGENCY STOPPED", (50, 240), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255, 0, 0), 3)
         return (
             display_frame, "0 FPS", "0.0%", "0 WPM", "emergency stop", "$0.00",
-            df_rates, "\n".join(log_history[:8]), "🚨 hardware & processing halted via e-stop", df_chart
+            df_rates, "\n".join(log_history[:8]), "🚨 hardware & processing halted via e-stop", df_chart,"emergency stop activated"
         )
 
     if frame is None or model is None:
         status_txt = "⚠️ Model file missing!" if model is None else "No Frame Input"
         empty_frame = np.zeros((480, 640, 3), dtype=np.uint8)
-        return empty_frame, "0 FPS", "0.0%", "0 WPM", "0.0%", "$0.00", df_rates, status_txt, "Waiting...", df_chart
+        return empty_frame, "0 FPS", "0.0%", "0 WPM", "0.0%", "$0.00", df_rates, status_txt, "Waiting...", df_chart,"",""
 
     current_time = time.time()
     cleanup_tracking_memory(current_time)
@@ -432,7 +498,7 @@ def process_single_frame(frame):
 
     with state_lock:
         check_and_update_conveyor_status()
-        target, control_log, payload_display = advanced_robot_logic(
+        target, control_log, payload_display ,payload_json= advanced_robot_logic(
             detected_batch, clean_frame_for_analysis, frame_w, frame_h
         )
 
@@ -511,6 +577,24 @@ def process_single_frame(frame):
     df_chart = pd.DataFrame(time_series_data)
     logs_display = "\n".join(log_history[:8])
 
+
+
+    if payload_json is not None:
+        arduino_log_out.insert(0,payload_json) 
+    
+    if len(arduino_log_out)>3:
+        arduino_log_out.pop(-1)
+
+
+        
+    if payload_display is not None:
+        payload.insert(0,payload_display) 
+    
+    if len(payload)>3:
+        payload.pop(-1)
+
+
+
     enhanced_frame = cv2.cvtColor(enhanced_frame, cv2.COLOR_BGR2RGB)
     return (
         enhanced_frame,
@@ -521,8 +605,11 @@ def process_single_frame(frame):
         revenue_display,
         df_rates,
         logs_display,
-        payload_display,
+        payload[0] if payload else " ",
         df_chart,
+        arduino_log_out[0] if arduino_log_out else " ",
+        
+
     )
 
 
@@ -551,7 +638,7 @@ def trigger_emergency_stop():
 
     return (
         empty_frame, "0 FPS", "0.0%", "0 WPM", "emergency stop", f"${system_metrics['total_revenue']:.2f}",
-        df_rates, "\n".join(log_history[:8]), "🚨 HARDWARE & PROCESSING HALTED VIA E-STOP", df_chart
+        df_rates, "\n".join(log_history[:8]), "🚨 HardWare & Processing Halted Via e-stop", df_chart
     )
 
 
@@ -596,28 +683,117 @@ def empty_selected_bin(bin_name):
     return get_current_rates_df(), "\n".join(log_history[:8])
 
 
+
+
+def ensure_val_dataset_exists(val_dir_path, zip_path):
+
+    valid_extensions = ("*.jpg", "*.jpeg", "*.png", "*.bmp", "*.webp")
+    images_val_path = os.path.join(val_dir_path, "images", "val")
+
+# if os.path.exists(val_dir_path) and os.listdir(val_dir_path):
+    has_images = False
+    if os.path.exists(images_val_path):
+        for ext in valid_extensions:
+            if glob.glob(os.path.join(images_val_path, ext)):
+                has_images = True
+                break
+
+    
+    if has_images:
+        return True, "Dataset exists and is valid."
+
+    try:
+        print("Downloading validation dataset from GitHub...")
+        
+        urllib.request.urlretrieve(VAL_ZIP_URL, zip_path)
+
+       
+        extract_to_dir = os.path.dirname(val_dir_path)
+        with zipfile.ZipFile(zip_path, "r") as zip_ref:
+            zip_ref.extractall(extract_to_dir)
+
+        
+        if os.path.exists(zip_path):
+            os.remove(zip_path)
+
+        return True, "Dataset downloaded successfully!"
+    except Exception as e:
+        if os.path.exists(zip_path):
+            os.remove(zip_path)
+        return False, f"Failed to download dataset: {str(e)}"
+
+
 def evaluate_model_benchmark():
     if not os.path.exists(DATA_YAML_PATH):
         return f"⚠️ **Benchmark Unavailable**: '{DATA_YAML_PATH}' not found in root directory."
     if model is None:
         return f"⚠️ **Benchmark Unavailable**: Model weights not loaded from '{MODEL_PATH}'."
 
+    
+    temp_dir = tempfile.gettempdir()
+    zip_download_path = os.path.join(temp_dir, "val_temp.zip")
+    val_extract_path = os.path.join(temp_dir, "val")
+
+  
+    success, msg = ensure_val_dataset_exists(
+        val_extract_path, zip_download_path
+    )
+    if not success:
+        return f"⚠️ **Benchmark Error**: {msg}"
+
     try:
-        metrics = model.val(data=DATA_YAML_PATH, verbose=False ,imgsz=416)
+        
+
+        with open(DATA_YAML_PATH, "r", encoding="utf-8") as f:
+            yaml_data = yaml.safe_load(f)
+
+
+        yaml_data["path"] = val_extract_path
+
+       
+        yaml_data["val"] = "images/val"
+
+      
+        yaml_data["train"] = "images/train"
+
+
+        with tempfile.NamedTemporaryFile(
+            "w", suffix=".yaml", delete=False, encoding="utf-8"
+        ) as tmp_file:
+            yaml.dump(yaml_data, tmp_file)
+            temp_yaml_path = tmp_file.name
+
+        runs_temp_dir = os.path.join(temp_dir, "yolo_runs")
+        metrics = model.val(
+            data=temp_yaml_path,
+            verbose=False,
+            imgsz=640,
+            save=False,
+            plots=False,
+            project=runs_temp_dir, 
+            name="val_results",
+        )
+
+        
+        if os.path.exists(temp_yaml_path):
+            os.remove(temp_yaml_path)
+
         map50 = metrics.box.map50
         precision = metrics.box.mp
         recall = metrics.box.mr
+
         return (
-            f" **Offline Model Benchmarks (Validation Set)**:\n"
+            f"📊 **Offline Model Benchmarks (Validation Set)**:\n"
             f"• **mAP@50**: {map50:.3f}\n"
             f"• **Precision**: {precision:.3f}\n"
             f"• **Recall**: {recall:.3f}\n"
             f"* Note: Video streaming paused temporarily during benchmark evaluation."
         )
+
     except Exception as e:
         return f"⚠️ Benchmark Error: {str(e)}"
 
-
+    
 def handle_reconnect():
     global arduino
     if arduino and hasattr(arduino, "is_open") and arduino.is_open:
@@ -1052,6 +1228,13 @@ custom_css = """
     box-shadow: 0 0 12px rgba(5, 150, 105, 0.5) !important;
 }
 
+
+#arduino-log textarea {
+    background-color: #1e1e1e !important;
+    color: #00ff66 !important;
+    font-family: 'Courier New', Courier, monospace !important;
+    font-size: 13px !important;
+}
 """
 
 
@@ -1178,6 +1361,19 @@ with gr.Blocks(title="ECO-SORT AI | Smart Waste Automation") as demo:
             
             eval_output = gr.Markdown()
 
+
+
+            with gr.Column():
+                
+                arduino_log_box = gr.Textbox(
+                    label="Live Robot|Arduino Input",
+                    placeholder="Waiting for object detection and command transmission...",
+                    lines=12,
+                    max_lines=20,
+                    interactive=False, 
+                    elem_id="arduino-log"
+                )
+
     # TIME SERIES CHART SECTION 
     gr.HTML("<hr style='margin: 20px 0; border: none; border-top: 1px solid rgba(255,255,255,0.1);'>")
     with gr.Row():
@@ -1202,7 +1398,7 @@ with gr.Blocks(title="ECO-SORT AI | Smart Waste Automation") as demo:
         inputs=input_cam,
         outputs=[
             output_cam, metric_fps, metric_conf, metric_speed, metric_oee,
-            metric_rev, rates_table, control_logs, kinematics_payload_box, live_chart,
+            metric_rev, rates_table, control_logs, kinematics_payload_box, live_chart,arduino_log_box
         ],
         queue=True,
         
@@ -1213,7 +1409,7 @@ with gr.Blocks(title="ECO-SORT AI | Smart Waste Automation") as demo:
         inputs=input_video,
         outputs=[
             output_cam, metric_fps, metric_conf, metric_speed, metric_oee,
-            metric_rev, rates_table, control_logs, kinematics_payload_box, live_chart,
+            metric_rev, rates_table, control_logs, kinematics_payload_box, live_chart,arduino_log_box
         ],
     )
 
@@ -1224,6 +1420,8 @@ with gr.Blocks(title="ECO-SORT AI | Smart Waste Automation") as demo:
     )
     
 
+
+    
     btn_eval.click(fn=evaluate_model_benchmark, inputs=None, outputs=eval_output)
 
     btn_reset.click(
@@ -1252,10 +1450,23 @@ with gr.Blocks(title="ECO-SORT AI | Smart Waste Automation") as demo:
         outputs=[control_logs, rates_table],
     )
 
+
+
+
 if __name__ == "__main__":
     demo.queue().launch(share=False,
     theme=gr.themes.Soft(),
     css=custom_css,
     head=custom_head)
 
-    
+
+
+
+
+
+
+
+
+
+
+
