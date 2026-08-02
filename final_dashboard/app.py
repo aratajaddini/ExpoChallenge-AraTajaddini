@@ -689,18 +689,18 @@ def ensure_val_dataset_exists(val_dir_path, zip_path):
 
     valid_extensions = ("*.jpg", "*.jpeg", "*.png", "*.bmp", "*.webp")
     images_val_path = os.path.join(val_dir_path, "images", "val")
-
-# if os.path.exists(val_dir_path) and os.listdir(val_dir_path):
-    has_images = False
-    if os.path.exists(images_val_path):
-        for ext in valid_extensions:
-            if glob.glob(os.path.join(images_val_path, ext)):
-                has_images = True
-                break
-
     
-    if has_images:
-        return True, "Dataset exists and is valid."
+    if os.path.exists(val_dir_path) and os.listdir(val_dir_path):
+        has_images = False
+        if os.path.exists(images_val_path):
+            for ext in valid_extensions:
+                if glob.glob(os.path.join(images_val_path, ext)):
+                    has_images = True
+                    break
+    
+        
+        if has_images:
+            return True, "Dataset exists and is valid."
 
     try:
         print("Downloading validation dataset from GitHub...")
