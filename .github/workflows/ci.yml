@@ -32,10 +32,10 @@ jobs:
             echo "backend/ still absent"
           fi
       - name: Test
-        # =============== FIX APPLIED HERE ===============
+        # =============== FIX APPLIED ===============
         env:
-          API_KEY: testing_key   # <-- Changed to match the header in test_api.py
-        # ===============================================
+          API_KEY: testing_key   # <-- Now perfectly matched with test_api.py
+        # ===========================================
         run: |
           if [ -d backend ]; then
             cd backend && pytest -v --tb=short
