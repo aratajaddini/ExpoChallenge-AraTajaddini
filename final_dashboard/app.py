@@ -120,7 +120,7 @@ WASTE_VALUES = {
     "Cigarette": 0.00, "Other litter": 0.00, "Unlabeled litter": 0.00,
 }
 
-BIN_CAPACITIES = {k: 6 for k in CLASS_MAPPING.keys()}
+BIN_CAPACITIES = {k: 100 for k in CLASS_MAPPING.keys()}
 
 TRIGGER_LINE_RATIO = 0.50
 TRIGGER_TOLERANCE = 25
@@ -689,9 +689,8 @@ def ensure_val_dataset_exists(val_dir_path, zip_path):
 
     valid_extensions = ("*.jpg", "*.jpeg", "*.png", "*.bmp", "*.webp")
     images_val_path = os.path.join(val_dir_path, "images", "val")
-    
+    has_images = False
     if os.path.exists(val_dir_path) and os.listdir(val_dir_path):
-        has_images = False
         if os.path.exists(images_val_path):
             for ext in valid_extensions:
                 if glob.glob(os.path.join(images_val_path, ext)):
@@ -841,22 +840,6 @@ def reset_system_metrics():
     )
 
 
-# def analyze_uploaded_video(video_path):
-#     if not video_path:
-#         df_rates = get_current_rates_df()
-#         empty_frame = np.zeros((480, 640, 3), dtype=np.uint8)
-#         yield empty_frame, "0 FPS", "0.0%", "0 WPM", "0.0%", "$0.00", df_rates, "⚠️ Please upload a video first!", "Waiting...", pd.DataFrame({"Time": [0], "Total Sorted": [0]})
-#         return
-
-#     cap = cv2.VideoCapture(video_path)
-#     while cap.isOpened():
-#         ret, frame = cap.read()
-#         if not ret:
-#             break
-#         frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-#         yield process_single_frame(frame_rgb)
-#         time.sleep(0.01)
-#     cap.release()
 
 
 
@@ -955,7 +938,7 @@ def toggle_source(mode):
 custom_css = """
 /* set the total screen space*/
 .gradio-container {
-   /* width:600px !important;*/
+ 
     max-width: 2600px !important;
     margin: 30px !important;
     padding: 20px !important;
@@ -1321,7 +1304,6 @@ with gr.Blocks(title="ECO-SORT AI | Smart Waste Automation") as demo:
 
             input_video = gr.Video(label="Upload Conveyor Video File", visible=False)
 
-            # gr.Examples(examples=[["examples/output1.mp4"]],inputs=input_video,label="Video Examples")
             
             btn_analyze = gr.Button(" Start Analysis", visible=False,elem_classes=["btn-start_to_analyze"])
 
@@ -1331,9 +1313,7 @@ with gr.Blocks(title="ECO-SORT AI | Smart Waste Automation") as demo:
         with gr.Column(scale=1,elem_classes=["metric-card"]):
             gr.Markdown("Bin Capacities & Evacuation")
             rates_table = gr.Dataframe(value=get_current_rates_df(), interactive=False)
-            # gr.Markdown(
-            #     "<small>*Notice: **Sorted Count** tracks lifetime items; **Bin Fill Status** shows physical capacity.*</small>"
-            # )
+           
         
             with gr.Row():
                 select_bin_dropdown = gr.Dropdown(
