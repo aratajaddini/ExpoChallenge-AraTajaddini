@@ -1,26 +1,44 @@
+import os
+
 import pytest
 from fastapi.testclient import TestClient
 
+os.environ["API_KEY"] = "testing_key"
+
+from backend.main import app
+import backend.inference as inference_module
+
+
+class DummyProbs:
+    top1 = 0
+    top1conf = 0.95
+    data = [0.95, 0.02, 0.01, 0.01, 0.01]
+
+
+class DummyResult:
+    probs = DummyProbs()
+
+
+class DummyModel:
+    names = {
+        0: "Glass",
+        1: "Metal",
+        2: "Paper",
+        3: "Plastic",
+        4: "Waste",
+    }
+
+    def __call__(self, image, verbose=False):
+        return [DummyResult()]
+
 
 @pytest.fixture
-def client(tmp_path, monkeypatch):
-    # Redirect DB and uploads to a temp path
-    import backend.config as config
-    monkeypatch.setattr(config, "DB_PATH", tmp_path / "test.db")
-    monkeypatch.setattr(config, "UPLOAD_DIR", tmp_path)
+def client(monkeypatch):
+    monkeypatch.setattr(
+        inference_module,
+        "_get_model",
+        lambda: DummyModel(),
+    )
 
-    import backend.models.database as db
-    monkeypatch.setattr(db, "DB_PATH", tmp_path / "test.db")
-
-    # Mock inference so the real model is never loaded
-    def mock_inference(image_path: str) -> dict:
-        scores = {"Glass": 0.7, "Metal": 0.1, "Paper": 0.1,
-                  "Plastic": 0.05, "Waste": 0.05}
-        return {"top_class": "Glass", "confidence": 0.7, "scores": scores}
-
-    import backend.routers.predict as predict_router
-    monkeypatch.setattr(predict_router, "run_inference", mock_inference)
-
-    from backend.main import app
-    with TestClient(app) as c:
-        yield c
+    with TestClient(app) as test_client:
+        yield test_client
