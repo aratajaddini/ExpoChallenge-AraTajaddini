@@ -32,7 +32,16 @@ jobs:
             echo "backend/ still absent"
           fi
       - name: Test
+        env:
+          API_KEY: testing_key
         run: |
+          if [ -z "$API_KEY" ]; then
+            echo "API_KEY is missing"
+            exit 1
+          fi
+
+          echo "API_KEY is available to the test process"
+
           if [ -d backend ]; then
             cd backend && pytest -v --tb=short
           else
