@@ -1,42 +1,71 @@
 import io
+from fastapi.testclient import TestClient
+
+# Define the authentication header for the test environment
+HEADERS = {"X-API-Key": "testing_key"}
 
 
 def _fake_image():
-    return io.BytesIO(b"fakeimagebytes")
+    # Using PIL to generate a real, tiny RGB JPEG image in memory
+    from PIL import Image
+
+    image = Image.new("RGB", (32, 32), color=(255, 0, 0))
+    buffer = io.BytesIO()
+    image.save(buffer, format="JPEG")
+    buffer.seek(0)
+    return buffer
 
 
-def test_root(client):
-    r = client.get("/")
-    assert r.status_code == 200
-    assert r.json()["status"] == "ok"
+def test_root(client: TestClient):
+    # Root endpoint is usually public, so no headers needed here
+    response = client.get("/")
+    assert response.status_code == 200
+    assert response.json()["status"] == "ok"
 
 
-def test_predict(client):
+def test_predict(client: TestClient):
     files = {"file": ("test.jpg", _fake_image(), "image/jpeg")}
-    r = client.post("/predict", files=files)
-    assert r.status_code == 200
-    data = r.json()
+    # Added headers=HEADERS
+    response = client.post("/predict", files=files, headers=HEADERS)
+    
+    assert response.status_code == 200
+    data = response.json()
+
     assert data["top_class"] == "Glass"
     assert set(data["scores"].keys()) == {"Glass", "Metal", "Paper", "Plastic", "Waste"}
     assert data["id"] >= 1
 
 
-def test_history(client):
+def test_history(client: TestClient):
     files = {"file": ("test.jpg", _fake_image(), "image/jpeg")}
-    client.post("/predict", files=files)
-    r = client.get("/history")
-    assert r.status_code == 200
-    assert len(r.json()) >= 1
+    # Predict must also send the header to create the history entry
+    client.post("/predict", files=files, headers=HEADERS)
+    
+    # Added headers=HEADERS
+    response = client.get("/history", headers=HEADERS)
+    assert response.status_code == 200
+    assert len(response.json()) >= 1
 
 
-def test_feedback(client):
+def test_feedback(client: TestClient):
     files = {"file": ("test.jpg", _fake_image(), "image/jpeg")}
-    pred = client.post("/predict", files=files).json()
-    r = client.post("/feedback", json={"prediction_id": pred["id"], "correct_class": "Metal"})
-    assert r.status_code == 200
-    assert r.json()["correct_class"] == "Metal"
+    prediction = client.post("/predict", files=files, headers=HEADERS).json()
+    
+    # Added headers=HEADERS
+    response = client.post(
+        "/feedback",
+        json={"prediction_id": prediction["id"], "correct_class": "Metal"},
+        headers=HEADERS,
+    )
+    assert response.status_code == 200
+    assert response.json()["correct_class"] == "Metal"
 
 
-def test_feedback_not_found(client):
-    r = client.post("/feedback", json={"prediction_id": 9999, "correct_class": "Metal"})
-    assert r.status_code == 404
+def test_feedback_not_found(client: TestClient):
+    # Added headers=HEADERS
+    response = client.post(
+        "/feedback",
+        json={"prediction_id": 9999, "correct_class": "Metal"},
+        headers=HEADERS,
+    )
+    assert response.status_code == 404
