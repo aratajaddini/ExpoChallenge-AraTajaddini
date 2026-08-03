@@ -30,7 +30,7 @@ local_settings.py
 *.sqlite3
 
 # Ignore uploaded runtime files, but preserve the empty directory in Git.
-/ backend/uploads/*
+/backend/uploads/*
 !/backend/uploads/.gitkeep
 
 # Ignore backend runtime logs.
@@ -61,8 +61,9 @@ local_settings.py
 *.avi
 *.wav
 
-/frontend/video/*
-!/frontend/video/.gitkeep
+# Keep required frontend video assets tracked.
+!/frontend/video/
+!/frontend/video/*.mp4
 
 # ---------- Build and packaging ----------
 /build/
