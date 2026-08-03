@@ -6,7 +6,14 @@ HEADERS = {"X-API-Key": "testing_key"}
 
 
 def _fake_image():
-    return io.BytesIO(b"fakeimagebytes")
+    # Using PIL to generate a real, tiny RGB JPEG image in memory
+    from PIL import Image
+
+    image = Image.new("RGB", (32, 32), color=(255, 0, 0))
+    buffer = io.BytesIO()
+    image.save(buffer, format="JPEG")
+    buffer.seek(0)
+    return buffer
 
 
 def test_root(client: TestClient):
