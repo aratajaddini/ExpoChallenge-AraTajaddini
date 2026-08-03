@@ -216,3 +216,26 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Smart Waste Robot: local model files and weights
+models/
+backend/weights/
+*.pt
+*.pt.bak
+*.onnx
+*.engine
+
+# Smart Waste Robot: generated runtime data
+backend/data/
+
+# Local vector indexes and retrieval artifacts
+*.faiss
+*.index
+*.pkl
+*.pickle
+
+# Logs and local runtime output
+logs/
+*.log
+
+# Keep frontend/video tracked (Do NOT ignore frontend/video)
