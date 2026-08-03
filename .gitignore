@@ -130,13 +130,3 @@ desktop.ini
 # ---------- Generated documentation ----------
 /docs/_build/
 /site/
-
-# Local environment secrets
-.env
-.env.local
-.env.*.local
-
-# Local environment secrets
-.env
-.env.local
-.env.*.local
