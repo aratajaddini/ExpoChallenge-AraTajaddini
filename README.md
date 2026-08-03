@@ -35,7 +35,7 @@ documentation chatbot.
 
 ## 🚀 Quick Start
 
-
+```bash
 # Install dependencies
 pip install -r requirements.txt
 
