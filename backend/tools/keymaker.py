@@ -1,14 +1,18 @@
+# -*- coding: utf-8 -*-
 """Desktop client for minting shift API keys via the admin endpoints."""
 from __future__ import annotations
 
 import threading
 import tkinter as tk
 from tkinter import messagebox, ttk
-
+import os
 import requests
 
 TIMEOUT = 10
 
+# Create a global session to prevent localhost traffic from going through system proxies.
+HTTP = requests.Session()
+HTTP.trust_env = False
 
 class KeyMaker(tk.Tk):
     """Minimal Tk GUI wrapping POST/GET/DELETE /admin/keys."""
@@ -18,7 +22,32 @@ class KeyMaker(tk.Tk):
         self.title("SWR Key Maker")
         self.geometry("620x440")
         self.resizable(False, False)
+
+        # Admin key variable
+        self.admin = tk.StringVar()
+
         self._build()
+        # ✅ Ensured that the admin key is loaded from .env after building the UI
+        self._load_admin_key()  # Auto-load from .env
+
+    def _load_admin_key(self) -> None:
+        """Try to find .env file and extract API_KEY."""
+        # Find the exact path of the .env file relative to this keymaker.py file.
+        # Assumes .env is in the project root folder (same directory as keymaker.py).
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        env_path = os.path.join(base_dir, ".env")
+
+        if os.path.exists(env_path):
+            try:
+                with open(env_path, "r") as f:
+                    for line in f:
+                        if line.startswith("API_KEY="):
+                            # Remove API_KEY= and any surrounding quotes/spaces
+                            key = line.strip().split("=", 1)[1].strip("'\" ")
+                            self.admin.set(key)
+                            return
+            except Exception as e:
+                print(f"Error reading .env: {e}")
 
     def _build(self) -> None:
         """Lay out the form, action buttons and result areas."""
@@ -26,8 +55,7 @@ class KeyMaker(tk.Tk):
         frm = ttk.Frame(self)
         frm.pack(fill="x", **pad)
 
-        self.base = tk.StringVar(value="http://127.0.0.1:8000")
-        self.admin = tk.StringVar()
+        self.base = tk.StringVar(value="http://127.0.0.1:8001")
         self.label = tk.StringVar(value="shift-morning")
         self.hours = tk.StringVar(value="8")
 
@@ -42,111 +70,89 @@ class KeyMaker(tk.Tk):
                 frm, textvariable=var, width=58, show="*" if hide else ""
             ).grid(row=row, column=1, sticky="w", pady=3)
 
-        btns = ttk.Frame(self)
-        btns.pack(fill="x", **pad)
-        ttk.Button(btns, text="Mint key", command=self._mint).pack(side="left")
-        ttk.Button(btns, text="Refresh list", command=self._list).pack(side="left", padx=6)
-        ttk.Button(btns, text="Revoke selected", command=self._revoke).pack(side="left")
+        btn_frm = ttk.Frame(frm)
+        btn_frm.grid(row=4, column=0, columnspan=2, pady=10, sticky="w")
+        ttk.Button(btn_frm, text="Mint Key", command=self._on_mint).pack(side="left", padx=5)
+        ttk.Button(btn_frm, text="Refresh List", command=self._on_refresh).pack(side="left", padx=5)
+        ttk.Button(btn_frm, text="Revoke Selected", command=self._on_revoke).pack(side="left", padx=5)
+        ttk.Button(btn_frm, text="Copy Key", command=self._on_copy).pack(side="left", padx=5)
 
-        self.result = tk.Text(self, height=4, wrap="none")
-        self.result.pack(fill="x", **pad)
-        ttk.Button(self, text="Copy key", command=self._copy).pack(anchor="w", padx=8)
+        self.tree = ttk.Treeview(self, columns=("id", "preview", "label", "expires_at", "revoked"), show="headings", height=12)
+        self.tree.heading("id", text="ID"); self.tree.heading("preview", text="Preview")
+        self.tree.heading("label", text="Label"); self.tree.heading("expires_at", text="Expires At")
+        self.tree.heading("revoked", text="Revoked")
 
-        cols = ("id", "preview", "label", "expires_at", "revoked")
-        self.tree = ttk.Treeview(self, columns=cols, show="headings", height=9)
-        for col in cols:
-            self.tree.heading(col, text=col)
-            self.tree.column(col, width=110 if col != "expires_at" else 190)
-        self.tree.pack(fill="both", expand=True, **pad)
+        self.tree.column("id", width=40, anchor="center"); self.tree.column("preview", width=180, anchor="w")
+        self.tree.column("label", width=120, anchor="w"); self.tree.column("expires_at", width=180, anchor="center")
+        self.tree.column("revoked", width=70, anchor="center")
+
+        sb = ttk.Scrollbar(self, orient="vertical", command=self.tree.yview)
+        self.tree.configure(yscrollcommand=sb.set)
+        self.tree.pack(side="left", fill="both", expand=True, padx=(8, 0), pady=8)
+        sb.pack(side="right", fill="y", padx=(0, 8), pady=8)
+
+        self.last_minted_key = ""
 
     def _headers(self) -> dict[str, str]:
-        """Auth header built from the admin key field."""
         return {"X-API-Key": self.admin.get().strip()}
 
     def _url(self, path: str = "") -> str:
-        """Absolute admin endpoint URL."""
         return f"{self.base.get().rstrip('/')}/admin/keys{path}"
 
-    def _run(self, fn) -> None:
-        """Run a network call off the UI thread."""
-        threading.Thread(target=fn, daemon=True).start()
-
-    def _mint(self) -> None:
-        def job() -> None:
+    def _on_mint(self) -> None:
+        def task():
             try:
-                hours = int(self.hours.get())
-                r = requests.post(
-                    self._url(),
-                    json={"label": self.label.get().strip(), "hours": hours},
-                    headers=self._headers(),
-                    timeout=TIMEOUT,
-                )
-                r.raise_for_status()
-                data = r.json()
-                raw = data.get("api_key") or data.get("key", "")
-                text = f"{raw}\nexpires_at: {data.get('expires_at', '?')}"
-                self.after(0, lambda: self._show(text))
-                self.after(0, self._list)
-            except Exception as exc:
-                self.after(0, lambda: messagebox.showerror("Mint failed", str(exc)))
+                try: hours = int(self.hours.get().strip())
+                except ValueError:
+                    messagebox.showerror("Error", "Hours must be an integer."); return
 
-        self._run(job)
+                r = HTTP.post(self._url(), json={"label": self.label.get().strip(), "hours": hours}, headers=self._headers(), timeout=TIMEOUT)
 
-    def _list(self) -> None:
-        def job() -> None:
+                if r.status_code in (200, 201):
+                    data = r.json()
+                    # Fix: Extract api_key correctly
+                    self.last_minted_key = data.get("api_key") or data.get("key", "")
+                    messagebox.showinfo("Success", f"Key minted successfully!\n\nUse 'Copy Key' button to copy.")
+                    self._on_refresh()
+                else:
+                    messagebox.showerror("Server Error", f"Status: {r.status_code}\n{r.text}")
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed: {str(e)}")
+
+        threading.Thread(target=task, daemon=True).start()
+
+    def _on_refresh(self) -> None:
+        def task():
             try:
-                r = requests.get(self._url(), headers=self._headers(), timeout=TIMEOUT)
-                r.raise_for_status()
-                rows = r.json()
-                rows = rows.get("keys", rows) if isinstance(rows, dict) else rows
-                self.after(0, lambda: self._fill(rows))
-            except Exception as exc:
-                self.after(0, lambda: messagebox.showerror("List failed", str(exc)))
+                r = HTTP.get(self._url(), headers=self._headers(), timeout=TIMEOUT)
+                if r.status_code == 200:
+                    for item in self.tree.get_children(): self.tree.delete(item)
+                    for k in r.json():
+                        self.tree.insert("", "end", values=(k.get("id"), k.get("preview"), k.get("label"), k.get("expires_at") or "Never", "Yes" if k.get("revoked") else "No"))
+                else:
+                    messagebox.showerror("Server Error", f"Status: {r.status_code}")
+            except Exception as e:
+                messagebox.showerror("Error", str(e))
+        threading.Thread(target=task, daemon=True).start()
 
-        self._run(job)
+    def _on_revoke(self) -> None:
+        selected = self.tree.selection()
+        if not selected: return
+        key_id = self.tree.item(selected[0])["values"][0]
+        def task():
+            r = HTTP.delete(self._url(f"/{key_id}"), headers=self._headers(), timeout=TIMEOUT)
+            if r.status_code in (200, 204):
+                messagebox.showinfo("Success", "Revoked.")
+                self._on_refresh()
+        threading.Thread(target=task, daemon=True).start()
 
-    def _revoke(self) -> None:
-        sel = self.tree.selection()
-        if not sel:
-            messagebox.showinfo("Revoke", "Select a row first.")
-            return
-        key_id = self.tree.item(sel[0], "values")[0]
-        if not messagebox.askyesno("Revoke", f"Revoke key id {key_id}?"):
-            return
-
-        def job() -> None:
-            try:
-                r = requests.delete(
-                    self._url(f"/{key_id}"), headers=self._headers(), timeout=TIMEOUT
-                )
-                r.raise_for_status()
-                self.after(0, self._list)
-            except Exception as exc:
-                self.after(0, lambda: messagebox.showerror("Revoke failed", str(exc)))
-
-        self._run(job)
-
-    def _show(self, text: str) -> None:
-        """Replace the result box content."""
-        self.result.delete("1.0", "end")
-        self.result.insert("1.0", text)
-
-    def _fill(self, rows: list[dict]) -> None:
-        """Repopulate the key table."""
-        self.tree.delete(*self.tree.get_children())
-        for row in rows:
-            self.tree.insert("", "end", values=(
-                row.get("id"), row.get("preview"), row.get("label"),
-                row.get("expires_at"), row.get("revoked"),
-            ))
-
-    def _copy(self) -> None:
-        """Copy the first result line (the raw key) to the clipboard."""
-        raw = self.result.get("1.0", "1.end").strip()
-        if raw:
+    def _on_copy(self) -> None:
+        if self.last_minted_key:
             self.clipboard_clear()
-            self.clipboard_append(raw)
-
+            self.clipboard_append(self.last_minted_key)
+            messagebox.showinfo("Copied", "Full key copied to clipboard.")
+        else:
+            messagebox.showwarning("Warning", "No newly minted key available.")
 
 if __name__ == "__main__":
     KeyMaker().mainloop()

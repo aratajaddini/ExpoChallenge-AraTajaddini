@@ -50,8 +50,10 @@ def index(active_only: bool = False, _: str = Depends(require_admin)) -> list[Ke
     return [KeyInfo(**dict(row)) for row in keys.list_keys(active_only)]
 
 
-@router.delete("/{key_id}", status_code=status.HTTP_204_NO_CONTENT)
+# FIX: add response_model=None to satisfy 204 No Content
+@router.delete("/{key_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 def revoke(key_id: int, _: str = Depends(require_admin)) -> None:
     """Revoke a key by id."""
     if not keys.revoke_key(key_id):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Key not found.")
+    # No return body – 204 response.

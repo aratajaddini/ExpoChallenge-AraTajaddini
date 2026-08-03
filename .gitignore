@@ -13,7 +13,7 @@ ENV/
 env.bak/
 venv.bak/
 
-# ---------- Secrets & local config ----------
+# ---------- Secrets and local configuration ----------
 .env
 .env.*
 !.env.example
@@ -22,13 +22,21 @@ local_settings.py
 .streamlit/secrets.toml
 .pypirc
 
-# ---------- Runtime data (contains API key hashes) ----------
+# ---------- Runtime data ----------
+# These databases may contain API key hashes and local runtime state.
 *.db
 *.db-journal
 *.sqlite
 *.sqlite3
-uploads/
-logs/
+
+# Ignore uploaded runtime files, but preserve the empty directory in Git.
+/ backend/uploads/*
+!/backend/uploads/.gitkeep
+
+# Ignore backend runtime logs.
+/backend/logs/*
+!/backend/logs/.gitkeep
+
 *.log
 
 # ---------- Model artifacts ----------
@@ -37,21 +45,27 @@ logs/
 *.onnx
 *.safetensors
 *.engine
-backend/weights/*
-!backend/weights/.gitkeep
+
+/backend/weights/*
+!/backend/weights/.gitkeep
+
+# ---------- Local RAG artifacts ----------
+/models/
+/backend/data/kb_index.npz
+/backend/chat/index/
 
 # ---------- Media ----------
-# Large raw media stays out; the judged demo clip is whitelisted below.
 *.mp4
 *.mov
 *.mkv
 *.avi
 *.wav
-frontend/video/*
-!frontend/video/.gitkeep
 
-# ---------- Build / packaging ----------
-build/
+/frontend/video/*
+!/frontend/video/.gitkeep
+
+# ---------- Build and packaging ----------
+/build/
 /dist/
 /lib/
 /lib64/
@@ -72,10 +86,11 @@ MANIFEST
 *.dll
 *.bak
 *.manifest
-# NOTE: remove the next line if you ever want reproducible PyInstaller builds
-*.spec
 
-# ---------- Testing / linting caches ----------
+# Keep .spec files tracked for reproducible builds.
+# *.spec
+
+# ---------- Testing and linting caches ----------
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
@@ -85,7 +100,7 @@ dmypy.json
 .pytype/
 .tox/
 .nox/
-.cache
+.cache/
 .hypothesis/
 .coverage
 .coverage.*
@@ -96,11 +111,11 @@ nosetests.xml
 cover/
 
 # ---------- Notebooks ----------
-.ipynb_checkpoints
+.ipynb_checkpoints/
 profile_default/
 ipython_config.py
 
-# ---------- Editors / OS ----------
+# ---------- Editors and operating systems ----------
 .vscode/
 .idea/
 .spyderproject
@@ -111,6 +126,6 @@ tempCodeRunnerFile.py
 Thumbs.db
 desktop.ini
 
-# ---------- Docs ----------
-docs/_build/
-/site
+# ---------- Generated documentation ----------
+/docs/_build/
+/site/

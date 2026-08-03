@@ -374,18 +374,31 @@
             committed to making recycling smarter.
           </p>
 
+          <!-- ✅ Fixed contact buttons – correct GitHub repo and KB link -->
           <div class="contact-buttons">
-            <a href="https://github.com" target="_blank" rel="noopener noreferrer" class="btn-primary">
+            <a
+              href="https://github.com/aratajaddini/smart-waste-robot"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="btn-primary"
+            >
               View on GitHub
             </a>
-            <a href="#" class="btn-secondary">Read the Docs</a>
+            <a
+              href="https://github.com/aratajaddini/smart-waste-robot/tree/main/backend/docs/kb"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="btn-secondary"
+            >
+              Read the Docs
+            </a>
           </div>
         </div>
       </section>
     </main>
 
     <!-- ============================================================ -->
-    <!-- CHATBOT WIDGET — inserted between </main> and <footer>       -->
+    <!-- CHATBOT WIDGET — replaced with new markup                   -->
     <!-- ============================================================ -->
     <section
       id="chatbotWidget"
@@ -395,25 +408,105 @@
       <button
         id="chatToggle"
         class="chat-toggle"
+        type="button"
         aria-expanded="false"
         aria-controls="chatPanel"
       >
-        Ask the robot
+        <span class="chat-toggle-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path
+              d="M7 18.5 4 21v-4.2A7.8 7.8 0 0 1 3 13c0-4.4 4-8 9-8s9 3.6 9 8-4 8-9 8c-1.8 0-3.5-.4-5-.5Z"
+              stroke="currentColor"
+              stroke-width="1.7"
+              stroke-linejoin="round"
+            />
+            <path
+              d="M8 13h.01M12 13h.01M16 13h.01"
+              stroke="currentColor"
+              stroke-width="2.2"
+              stroke-linecap="round"
+            />
+          </svg>
+        </span>
+
+        <span class="chat-toggle-label">Ask TraceSort</span>
+
+        <span class="chat-toggle-status" aria-hidden="true"></span>
       </button>
 
-      <div id="chatPanel" class="chat-panel" role="dialog" aria-label="Analytics chat" hidden>
+      <div
+        id="chatPanel"
+        class="chat-panel"
+        role="dialog"
+        aria-modal="false"
+        aria-label="TraceSort Intelligence chat"
+        hidden
+      >
+        <div class="chat-panel-head">
+          <div class="chat-agent">
+            <div class="chat-agent-mark" aria-hidden="true">
+              ♻
+            </div>
+
+            <div class="chat-agent-copy">
+              <strong>TraceSort Intelligence</strong>
+              <span>
+                <i class="chat-online-dot" aria-hidden="true"></i>
+                Sorting system online
+              </span>
+            </div>
+          </div>
+
+          <button
+            id="chatClose"
+            class="chat-close"
+            type="button"
+            aria-label="Close chat"
+          >
+            <span aria-hidden="true">×</span>
+          </button>
+        </div>
+
         <div id="chatLog" class="chat-log" aria-live="polite"></div>
+
         <form id="chatForm" class="chat-form">
-          <label for="chatInput" class="sr-only">Your question</label>
-          <input
-            id="chatInput"
-            class="chat-input"
-            type="text"
-            placeholder="How many plastic items?"
-            autocomplete="off"
-            required
-          />
-          <button type="submit" class="chat-send">Send</button>
+          <label for="chatInput" class="sr-only">
+            Ask TraceSort a question
+          </label>
+
+          <div class="chat-input-shell">
+            <span class="chat-input-mark" aria-hidden="true">⌁</span>
+
+            <input
+              id="chatInput"
+              class="chat-input"
+              type="text"
+              placeholder="Ask about your waste stream..."
+              autocomplete="off"
+              required
+            />
+          </div>
+
+          <button
+            type="submit"
+            class="chat-send"
+            aria-label="Send question"
+          >
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path
+                d="m4 12 16-8-5.5 16-3.1-6.1L4 12Z"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linejoin="round"
+              />
+              <path
+                d="m11.4 13.9 3.7-3.7"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+              />
+            </svg>
+          </button>
         </form>
       </div>
     </section>
@@ -424,6 +517,12 @@
     </footer>
   </div>
 
+  <!-- ============================================================ -->
+  <!-- ✅ Set API base URL before loading script.js                 -->
+  <!-- ============================================================ -->
+  <script>
+    window.__API_BASE__ = "http://127.0.0.1:8001";
+  </script>
   <script src="script.js"></script>
 </body>
 </html>

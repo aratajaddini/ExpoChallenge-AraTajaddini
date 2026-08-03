@@ -1,10 +1,26 @@
-fastapi
-uvicorn[standard]
-python-multipart
-pydantic
-pillow
-numpy
-opencv-python-headless
+# --- API ---
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+python-multipart==0.0.20
+pydantic==2.10.4
+
+# --- Vision / model ---
+# Pinned explicitly: torch/torchvision arrive transitively via ultralytics
+# and sentence-transformers. Unpinned means two installs on two dates give
+# two environments, and best.pt loading is version-sensitive.
+# CPU-only box: on Linux/Colab add
+#   --extra-index-url https://download.pytorch.org/whl/cpu
+# to avoid pulling the ~2.5 GB CUDA build.
+torch==2.5.1
+torchvision==0.20.1
 ultralytics==8.4.95
-pytest
-httpx
+# Both opencv distributions are pinned to the same version: ultralytics pulls
+# the full opencv-python transitively, and whichever installs last owns cv2.
+opencv-python==4.10.0.84
+opencv-python-headless==4.10.0.84
+pillow==11.0.0
+
+# --- Chat / retrieval ---
+# rank-bm25 removed: chat/retriever.py implements BM25 directly.
+sentence-transformers==3.3.1
+numpy==2.1.3

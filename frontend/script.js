@@ -6,6 +6,7 @@
     const STORAGE_KEY = 'tracesort_api_key';
     const MAX_UPLOAD_BYTES = 150 * 1024 * 1024;
     const VIDEO_EXT = /\.(mp4|mov|mkv|avi|webm)$/i;
+    const MAX_QUESTION_LENGTH = 1000;        // added for input protection
 
     const CONFIG = {
         API_BASE: window.__API_BASE__ || '',   // ✅ empty = same origin
@@ -154,7 +155,8 @@
     /** Fetch label list from the backend. Non-fatal on failure. */
     async function loadClasses() {
         try {
-            const res = await apiFetch('/classes');
+            // ✅ FIX: changed from '/classes' to '/predict/classes'
+            const res = await apiFetch('/predict/classes');
             if (!res.ok) throw new Error('HTTP ' + res.status);
             const data = await res.json();
             modelClasses = Array.isArray(data.classes) ? data.classes : [];
@@ -871,54 +873,244 @@
             await loadClasses();
         }
     })();
-})();
 
-// ──────────────────────────────────────────────────────────────
-//  CHATBOT WIDGET – appended per user request
-// ──────────────────────────────────────────────────────────────
-(function initChatbot() {
-  const toggle = document.getElementById("chatToggle");
-  const panel = document.getElementById("chatPanel");
-  const form = document.getElementById("chatForm");
-  const input = document.getElementById("chatInput");
-  const log = document.getElementById("chatLog");
+    // ============================================================
+    // 12. CHATBOT – Grounded console (using apiFetch)
+    // ============================================================
+    function initChatbot() {
+        const CHAT_TIMEOUT_MS = 20000;
 
-  if (!toggle || !panel || !form) return;
+        const toggle = document.getElementById('chatToggle');
+        const panel = document.getElementById('chatPanel');
+        const form = document.getElementById('chatForm');
+        const input = document.getElementById('chatInput');
+        const log = document.getElementById('chatLog');
+        const sendBtn = form ? form.querySelector('.chat-send') : null;
+        const closeBtn = document.getElementById('chatClose');
+        const toggleLabel = toggle ? toggle.querySelector('.chat-toggle-label') : null;
 
-  toggle.addEventListener("click", () => {
-    const open = panel.hasAttribute("hidden");
-    panel.toggleAttribute("hidden", !open);
-    toggle.setAttribute("aria-expanded", String(open));
-    if (open) input.focus();
-  });
+        if (!toggle || !panel || !form || !input || !log) return;
 
-  function append(text, who) {
-    const line = document.createElement("div");
-    line.className = `chat-msg chat-msg--${who}`;
-    line.textContent = text;
-    log.appendChild(line);
-    log.scrollTop = log.scrollHeight;
-  }
+        // ── helper functions ─────────────────────────────────────
+        function el(tag, className, text) {
+            const node = document.createElement(tag);
+            if (className) node.className = className;
+            if (text !== undefined) node.textContent = text;
+            return node;
+        }
 
-  form.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const message = input.value.trim();
-    if (!message) return;
+        // ── Badge mapping for the new `status` field ────────────
+        const BADGES = {
+            grounded:     { cls: 'ok',   label: 'Grounded' },
+            small_talk:   { cls: 'info', label: 'Assistant' },
+            out_of_scope: { cls: 'warn', label: 'Not grounded' },
+        };
 
-    append(message, "user");
-    input.value = "";
+        /** Pick badge state, falling back to the legacy boolean. */
+        function badgeFor(data) {
+            const key = typeof data.status === 'string'
+                ? data.status
+                : (data.grounded ? 'grounded' : 'out_of_scope');
+            return BADGES[key] || BADGES.out_of_scope;
+        }
 
-    try {
-      const res = await fetch("/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message }),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      append(data.reply, "bot");
-    } catch (err) {
-      append("Sorry, I couldn't reach the analytics service.", "bot");
+        function push(node) {
+            log.appendChild(node);
+            log.scrollTop = log.scrollHeight;
+            return node;
+        }
+
+        function addUser(text) {
+            return push(el('div', 'chat-msg user', text));
+        }
+
+        function addError(text) {
+            return push(el('div', 'chat-msg error', text));
+        }
+
+        // ── Render answer + evidence with textContent only ──────
+        function addAnswer(data) {
+            const wrap = el('div', 'chat-msg');
+            const badge = badgeFor(data);
+
+            wrap.appendChild(el('span', 'chat-badge ' + badge.cls, badge.label));
+            wrap.appendChild(el('div', null, String(data.answer || '').trim()));
+
+            const cites = Array.isArray(data.citations) ? data.citations : [];
+            if (cites.length) {
+                wrap.appendChild(el('div', 'chat-sources', 'Evidence (' + cites.length + ')'));
+                cites.forEach((c) => {
+                    const card = el('div', 'citation-card');
+                    const meta = el('div', 'cite-meta');
+                    meta.appendChild(el(
+                        'span',
+                        null,
+                        [c.source, c.section].filter(Boolean).join(' / ')
+                    ));
+                    const score = Number(c.score);
+                    meta.appendChild(el(
+                        'span',
+                        null,
+                        Number.isFinite(score) ? score.toFixed(3) : '—'
+                    ));
+                    card.appendChild(meta);
+                    card.appendChild(el('div', 'cite-text', String(c.text || '')));
+                    wrap.appendChild(card);
+                });
+            }
+            return push(wrap);
+        }
+
+        // ── Welcome state ──────────────────────────────────────────
+        let welcomeShown = false;
+
+        // ── Local FAQ answers ─────────────────────────────────────
+        const QUICK_QUESTIONS = {
+            "How does the AI waste sorting work?":
+                "The AI waste sorting system uses a camera and a YOLOv11 model to identify waste classes. The pipeline processes images or video frames, detects objects, and activates the sorting mechanism according to the detected class.",
+
+            "What are the 5 waste classes?":
+                "The system identifies five waste classes: plastic, metal, paper, glass, and organic waste.",
+
+            "How can I check the system confidence?":
+                "The confidence score indicates how strongly the model supports its prediction. Scores below 0.35 are considered uncertain. Confidence values are shown in the detection results.",
+
+            "Show me the API documentation.":
+                "The API includes the /chat endpoint for grounded RAG queries and administrative endpoints for API-key management. API requests require an X-API-Key header."
+        };
+
+        function addWelcome() {
+            if (welcomeShown || log.children.length > 0) return;
+            welcomeShown = true;
+
+            const welcome = el('div', 'chat-welcome');
+
+            const mark = el('div', 'chat-welcome-mark', '♻');
+            const eyebrow = el('span', 'chat-welcome-eyebrow', 'TRACE SORT / AI ASSISTANT');
+            const title = el('h3', null, 'Waste sorting intelligence');
+            const description = el(
+                'p',
+                null,
+                'Ask about detections, confidence scores, material classes, or evidence from the knowledge base.'
+            );
+
+            const prompts = el('div', 'chat-quick-prompts');
+
+            // Build quick buttons from the FAQ object – local answers only
+            Object.entries(QUICK_QUESTIONS).forEach(([question, answer]) => {
+                const button = el('button', 'chat-quick-prompt', question);
+                button.type = 'button';
+                button.addEventListener('click', () => {
+                    // Show user message
+                    addUser(question);
+                    // Show local answer with source: 'faq'
+                    addAnswer({
+                        answer,
+                        source: 'faq',
+                        citations: []
+                    });
+                });
+                prompts.appendChild(button);
+            });
+
+            welcome.append(mark, eyebrow, title, description, prompts);
+            push(welcome);
+        }
+
+        // ── Open / close ──────────────────────────────────────────
+        function setOpen(open) {
+            panel.hidden = !open;
+            toggle.setAttribute('aria-expanded', String(open));
+
+            if (toggleLabel) {
+                toggleLabel.textContent = open
+                    ? 'Close assistant'
+                    : 'Ask TraceSort';
+            } else {
+                toggle.textContent = open
+                    ? 'Close assistant'
+                    : 'Ask TraceSort';
+            }
+
+            if (open) {
+                addWelcome();
+                input.focus();
+            } else {
+                // Accessibility improvement: return focus to the toggle button
+                toggle.focus();
+            }
+        }
+
+        // ── Event listeners ──────────────────────────────────────
+        toggle.addEventListener('click', () => {
+            setOpen(panel.hidden);
+        });
+
+        if (closeBtn) {
+            closeBtn.addEventListener('click', () => {
+                setOpen(false);
+            });
+        }
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && !panel.hidden) {
+                setOpen(false);
+            }
+        });
+
+        // ── Form submission ──────────────────────────────────────
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const question = input.value.trim();
+            if (!question) return;
+
+            // Input protection: max length
+            if (question.length > MAX_QUESTION_LENGTH) {
+                addError('Please keep your question under 1000 characters.');
+                return;
+            }
+
+            addUser(question);
+            input.value = '';
+            input.disabled = true;
+            if (sendBtn) sendBtn.disabled = true;
+            const pending = push(el('div', 'chat-msg pending', 'Searching knowledge base…'));
+
+            try {
+                const res = await apiFetch('/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ question }),
+                }, CHAT_TIMEOUT_MS);
+
+                pending.remove();
+
+                if (res.status === 401 || res.status === 403) {
+                    addError('Invalid or missing API key. Set your key above, then retry.');
+                } else if (res.status === 503) {
+                    addError('Knowledge base not built. Run: python -m backend.tools.build_kb');
+                } else if (!res.ok) {
+                    addError('Server error (' + res.status + '). Check the backend logs.');
+                } else {
+                    addAnswer(await res.json());
+                }
+            } catch (err) {
+                pending.remove();
+                addError(err && err.name === 'AbortError'
+                    ? 'Request timed out. Try a shorter question.'
+                    : 'Cannot reach the backend. Is uvicorn running?');
+            } finally {
+                input.disabled = false;
+                if (sendBtn) sendBtn.disabled = false;
+                input.focus();
+            }
+        });
+
+        // Initial state: closed
+        setOpen(false);
     }
-  });
+
+    // Call the chatbot initializer
+    initChatbot();
+
 })();

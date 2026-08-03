@@ -3,7 +3,7 @@
 CREATE TABLE IF NOT EXISTS detections (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     class_name  TEXT    NOT NULL,
-    confidence  REAL    NOT NULL,
+    confidence  REAL    NOT NULL CHECK (confidence BETWEEN 0 AND 1),  -- enforce valid probability range
     source      TEXT    NOT NULL,
     created_at  TEXT    NOT NULL
 );

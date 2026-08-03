@@ -22,11 +22,7 @@ Mode = Literal["image", "video"]
 
 
 def _resolve_mode(filename: str | None, requested: str) -> tuple[Mode, str]:
-    """Pick the inference mode and a safe extension from the client's filename.
-
-    An explicit mode still has to match the extension whitelist, so the suffix
-    written to disk is always one we recognise.
-    """
+    """Pick the inference mode and a safe extension from the client's filename."""
     ext = Path(filename or "").suffix.lower()
     is_image, is_video = ext in IMAGE_EXTS, ext in VIDEO_EXTS
 
@@ -79,7 +75,6 @@ def predict(
         else:
             result = run_inference(dest.read_bytes())
     except (ValueError, OSError) as exc:
-        # OSError covers PIL.UnidentifiedImageError (mislabelled or corrupt file).
         raise HTTPException(422, f"could not decode {resolved}: {exc}") from exc
     finally:
         dest.unlink(missing_ok=True)
@@ -100,3 +95,20 @@ def predict(
         pred_id = cur.lastrowid
 
     return {**result, "id": pred_id, "filename": file.filename, "source": resolved}
+
+
+# ===== GET /classes =====
+# This endpoint is protected by the router‑level require_api_key dependency.
+@router.get("/classes", tags=["predict"])
+def get_classes(_: str = Depends(require_api_key)) -> dict[str, list[str]]:
+    """Return the list of supported waste categories."""
+    return {
+        "classes": [
+            "paper",
+            "plastic",
+            "metal",
+            "glass",
+            "organic",
+            "other",
+        ]
+    }
