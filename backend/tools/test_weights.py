@@ -1,4 +1,4 @@
-"""Dump metadata from a YOLO checkpoint."""
+"""Inspect metadata from a local YOLO checkpoint."""
 
 from pathlib import Path
 
@@ -9,6 +9,7 @@ CKPT = Path(__file__).resolve().parents[1] / "weights" / "best.pt"
 
 
 def dump_checkpoint_metadata(ckpt_path: Path) -> None:
+    """Load a local checkpoint and print its metadata."""
     ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
     model = ckpt.get("model")
     args = ckpt.get("train_args") or getattr(model, "args", None) or {}
@@ -25,9 +26,10 @@ def dump_checkpoint_metadata(ckpt_path: Path) -> None:
 
 @pytest.mark.skipif(
     not CKPT.is_file(),
-    reason="Model checkpoint is not included in the repository.",
+    reason="Local model weights are not included in the repository.",
 )
 def test_checkpoint_metadata_can_be_loaded() -> None:
+    """Verify that the optional local checkpoint can be opened."""
     dump_checkpoint_metadata(CKPT)
 
 
