@@ -12,8 +12,6 @@ from backend import config, keys
 from backend.analytics import store as detection_store
 from backend.chat import router as chat_router
 from backend.models.database import init_db
-# ✅ Only import routers that actually exist.
-# classes_router is NOT defined, so it's removed.
 from backend.routers import admin_keys, auth, feedback, history, predict
 
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
@@ -32,25 +30,24 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(title="Smart Waste Robot API", lifespan=lifespan)
 
-# Add CORS middleware with the configured allowed origins
+# CORS: origins come from config.ALLOWED_ORIGINS (never "*", see
+# config.assert_configured). Auth is header-based (X-API-Key), so
+# credentialed requests are not needed.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://127.0.0.1:5500",
-        "http://localhost:5500",
-    ],
-    allow_credentials=False,          # authentication uses header, not cookies
+    allow_origins=config.ALLOWED_ORIGINS,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Register API routers – order matters: keep these before the static fallback.
-app.include_router(auth.router)         # prefix: /auth
-app.include_router(predict.router)      # prefix: /predict
-app.include_router(history.router)      # prefix: /history
-app.include_router(feedback.router)     # prefix: /feedback
-app.include_router(admin_keys.router)   # prefix: /admin/keys
-app.include_router(chat_router.router)  # prefix: /chat
+# API routers first — the static mount below is a catch-all.
+app.include_router(auth.router)         # /auth
+app.include_router(predict.router)      # /predict
+app.include_router(history.router)      # /history
+app.include_router(feedback.router)     # /feedback
+app.include_router(admin_keys.router)   # /admin/keys
+app.include_router(chat_router.router)  # /chat
 
 
 @app.get("/health")
@@ -59,7 +56,5 @@ async def health_check() -> dict[str, str]:
     return {"status": "ok"}
 
 
-# Serve the frontend static files ONLY if the folder exists.
-# This must be the LAST mount: it catches any path not matched by routers.
 if FRONTEND_DIR.is_dir():
     app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
