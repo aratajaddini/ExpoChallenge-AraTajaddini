@@ -1,0 +1,6 @@
+-r requirements.txt
+
+# httpx is a test dependency only (fastapi.testclient).
+# Move it into requirements.txt when the /chat LLM client lands.
+pytest==8.3.4
+httpx==0.28.1
