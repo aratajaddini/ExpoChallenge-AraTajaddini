@@ -1,4 +1,5 @@
 import io
+
 from fastapi.testclient import TestClient
 
 # Define the authentication header for the test environment
@@ -16,18 +17,25 @@ def _fake_image():
     return buffer
 
 
-def test_root(client: TestClient):
-    # Root endpoint is usually public, so no headers needed here
-    response = client.get("/")
+def test_health(client: TestClient) -> None:
+    """Health endpoint returns liveness JSON."""
+    response = client.get("/health")
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
+
+
+def test_root_serves_frontend(client: TestClient) -> None:
+    """Root path serves the static frontend, not JSON."""
+    response = client.get("/")
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
 
 
 def test_predict(client: TestClient):
     files = {"file": ("test.jpg", _fake_image(), "image/jpeg")}
     # Added headers=HEADERS
     response = client.post("/predict", files=files, headers=HEADERS)
-    
+
     assert response.status_code == 200
     data = response.json()
 
@@ -40,7 +48,7 @@ def test_history(client: TestClient):
     files = {"file": ("test.jpg", _fake_image(), "image/jpeg")}
     # Predict must also send the header to create the history entry
     client.post("/predict", files=files, headers=HEADERS)
-    
+
     # Added headers=HEADERS
     response = client.get("/history", headers=HEADERS)
     assert response.status_code == 200
@@ -50,7 +58,7 @@ def test_history(client: TestClient):
 def test_feedback(client: TestClient):
     files = {"file": ("test.jpg", _fake_image(), "image/jpeg")}
     prediction = client.post("/predict", files=files, headers=HEADERS).json()
-    
+
     # Added headers=HEADERS
     response = client.post(
         "/feedback",
