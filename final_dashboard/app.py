@@ -19,8 +19,9 @@ import urllib.request
 import yaml
 import zipfile
 import glob
+import torch
 
-VAL_ZIP_URL = "https://github.com/abbas-pt/ExpoChallenge_AbbasLotfi/releases/download/v1.0.0/val.zip"
+VAL_ZIP_URL = "https://github.com/abbas-pt/ExpoChallenge_AbbasLotfi/releases/download/data/val.zip"
 
 if sys.stdout is None:
     sys.stdout = io.StringIO()
@@ -50,10 +51,15 @@ os.environ["GRADIO_ANALYTICS_ENABLED"] = "False"
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 # 1. Startup paths verification
-MODEL_PATH = get_resource_path("create_exe_file/best_abbas.pt")
-model = YOLO(MODEL_PATH)
+try:
+   device="cuda" if torch.cuda.is_available() else "cpu"
+except Exception as e:
+    print(e)
 
-DATA_YAML_PATH =get_resource_path("create_exe_file/data1.yaml")  # for validating model accuracy on dashboard
+MODEL_PATH = get_resource_path("best_abbas.pt")
+
+
+DATA_YAML_PATH =get_resource_path("data.yaml")  # for validating model accuracy on dashboard
 
 if not os.path.exists(MODEL_PATH):
     logging.warning(f"⚠️ Model file not found at '{MODEL_PATH}'. Ensure correct path before running detection.")
@@ -68,7 +74,7 @@ except Exception as e:
 
 
 # 3. Model & CLAHE setup
-model = YOLO(MODEL_PATH) if os.path.exists(MODEL_PATH) else None
+model = YOLO(MODEL_PATH).to(device=device) if os.path.exists(MODEL_PATH) else None
 clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
 
 
@@ -80,47 +86,65 @@ logging.info(
     f"{'legacy' if USES_LEGACY_ANGLE_CONVENTION else 'modern'} minAreaRect angle convention in use."
 )
 
-# 18-Class mapping
-CLASS_MAPPING = {
-    "Aluminium foil": "Aluminium foil",
-    "Bottle cap": "Bottle cap",
-    "Bottle": "Bottle",
-    "Broken glass": "Broken glass",
-    "Can": "Can",
-    "Carton": "Carton",
-    "Cigarette": "Cigarette",
-    "Cup": "Cup",
-    "Lid": "Lid",
-    "Other litter": "Other litter",
-    "Other plastic": "Other plastic",
-    "Paper": "Paper",
-    "Plastic bag - wrapper": "Plastic bag - wrapper",
-    "Plastic container": "Plastic container",
-    "Pop tab": "Pop tab",
-    "Straw": "Straw",
-    "Styrofoam piece": "Styrofoam piece",
-    "Unlabeled litter": "Unlabeled litter",
+
+
+# set gripper force for each class(0,100N)
+GRIP_FORCE_MAP = {
+    "Glass": 20,    
+    "Paper": 85,    
+    "Plastic": 50,  
+    "Metal": 70,    
+    "Waste": 60     
 }
 
+
+
+
+
+# 18-Class mapping
+CATEGORY_5_MAP = {
+    "Aluminium foil": "Metal",
+    "Bottle cap": "Plastic",
+    "Bottle": "Plastic",
+    "Broken glass": "Glass",
+    "Can": "Metal",
+    "Carton": "Paper",
+    "Cigarette": "Waste",
+    "Cup": "Paper",
+    "Lid": "Plastic",
+    "Other litter": "Waste",
+    "Other plastic": "Plastic",
+    "Paper": "Paper",
+    "Plastic bag - wrapper": "Plastic",
+    "Plastic container": "Plastic",
+    "Pop tab": "Metal",
+    "Straw": "Plastic",
+    "Styrofoam piece": "Waste",
+    "Unlabeled litter": "Waste",
+}
+
+
+TARGET_5_CLASSES = ["Glass", "Metal", "Paper", "Plastic", "Waste"]
+
 ENVIRONMENTAL_PRIORITY = {
-    "Can": 1, "Aluminium foil": 2, "Pop tab": 3, "Bottle": 4,
-    "Plastic container": 5, "Bottle cap": 6, "Lid": 7, "Other plastic": 8,
-    "Plastic bag - wrapper": 9, "Straw": 10, "Styrofoam piece": 11,
-    "Broken glass": 12, "Carton": 13, "Paper": 14, "Cup": 15,
-    "Cigarette": 16, "Other litter": 17, "Unlabeled litter": 18,
+    "Metal": 1,
+    "Plastic": 2,
+    "Glass": 3,
+    "Paper": 4,
+    "Waste": 5
 }
 
 
 # WASTE_VALUES (USD)
 WASTE_VALUES = {
-    "Can": 0.10, "Aluminium foil": 0.05, "Pop tab": 0.02, "Bottle": 0.08,
-    "Plastic container": 0.06, "Bottle cap": 0.01, "Lid": 0.01, "Other plastic": 0.03,
-    "Plastic bag - wrapper": 0.01, "Straw": 0.005, "Styrofoam piece": 0.01,
-    "Broken glass": 0.04, "Carton": 0.03, "Paper": 0.02, "Cup": 0.02,
-    "Cigarette": 0.00, "Other litter": 0.00, "Unlabeled litter": 0.00,
+    "Metal": 0.08,
+    "Plastic": 0.05,
+    "Glass": 0.04,
+    "Paper": 0.03,
+    "Waste": 0.00
 }
 
-BIN_CAPACITIES = {k: 100 for k in CLASS_MAPPING.keys()}
+BIN_CAPACITIES = {k: 10 for k in TARGET_5_CLASSES}
 
 TRIGGER_LINE_RATIO = 0.50
 TRIGGER_TOLERANCE = 25
@@ -164,11 +188,11 @@ system_metrics = {
     "total_revenue": 0.0,
 }
 
-for k in CLASS_MAPPING.keys():  # Add All CLASS_MAPPING Values in system_metrics
+for k in TARGET_5_CLASSES:  # Add All CLASS_MAPPING Values in system_metrics
     system_metrics[k] = 0
 
 
-bin_fill_level = {k: 0 for k in CLASS_MAPPING.keys()}
+bin_fill_level = {k: 0 for k in TARGET_5_CLASSES}
 sorting_timestamps = []
 log_history = []
 time_series_data = {"Time": [0], "Total Sorted": [0]}
@@ -230,23 +254,6 @@ def extract_object_orientation(frame: np.ndarray, bbox: tuple) -> float:
 
     return 0.0
 
-    # contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-    # if not contours: # Supporter For contours
-    #     edges = cv2.Canny(blur, 50, 150)
-    #     contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-    # if contours:
-    #     c = max(contours, key=cv2.contourArea)
-    #     if cv2.contourArea(c) > 20:
-    #         rect = cv2.minAreaRect(c)
-    #         angle = rect[-1]
-           
-    #         if USES_LEGACY_ANGLE_CONVENTION and angle < -45:
-    #             angle += 90.0
-    #         return float(angle)
-
-    # return 0.0
 
 
 def cleanup_tracking_memory(current_time: float, max_age_seconds: float = 30.0):
@@ -291,7 +298,7 @@ def calculate_kinematics_and_send(obj, frame, frame_width, frame_height):
 
 
     angle_deg = extract_object_orientation(frame, obj["bbox"])
-
+    required_force = GRIP_FORCE_MAP.get(obj["class"], 50)
 
     payload = {
         "cmd": "PICK",
@@ -299,6 +306,7 @@ def calculate_kinematics_and_send(obj, frame, frame_width, frame_height):
         "x": round(xw_mm, 2),
         "y": round(dist_to_grab_mm, 2),  
         "z": zw_mm,
+        "force": required_force,
         "theta": round(angle_deg, 2),
         "ttg_ms": time_to_grab_ms,
         "ts": int(time.time()) # Unix Timestamp
@@ -322,8 +330,7 @@ def calculate_kinematics_and_send(obj, frame, frame_width, frame_height):
         f"• World Coords (mm): Xw={xw_mm:+.1f}, Remaining Dist={dist_to_grab_mm:.1f}mm\n"
         f"• Real Angle (deg) : {angle_deg:.1f}°\n"
         f"• Time-to-Grab (ms): {time_to_grab_ms} ms\n"
-        # "--------------------------------------------------\n"
-        # f'Payload Sent: {payload_json}\n'
+        f"• Gripper_Force (N): {required_force} N\n"
         
     )
 
@@ -337,7 +344,7 @@ def calculate_kinematics_and_send(obj, frame, frame_width, frame_height):
 
 def get_current_rates_df():
     total = system_metrics["total_count"]
-    categories = list(CLASS_MAPPING.keys())
+    categories = list(TARGET_5_CLASSES)
     return pd.DataFrame({
         "Waste Category": categories,
         "Sorted Count (Total)": [system_metrics[k] for k in categories],
@@ -423,7 +430,6 @@ def advanced_robot_logic(detected_objects, frame, frame_width, frame_height):
     )
 
     return target_object, log_msg, payload_display,payload_json
-
 def process_single_frame(frame):
     global log_history, prev_frame_time, processed_track_ids, track_last_seen, total_downtime, bin_fill_level, is_emergency_stopped
 
@@ -435,13 +441,13 @@ def process_single_frame(frame):
         cv2.putText(display_frame, "EMERGENCY STOPPED", (50, 240), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255, 0, 0), 3)
         return (
             display_frame, "0 FPS", "0.0%", "0 WPM", "emergency stop", "$0.00",
-            df_rates, "\n".join(log_history[:8]), "🚨 hardware & processing halted via e-stop", df_chart,"emergency stop activated"
+            df_rates, "\n".join(log_history[:8]), "🚨 hardware & processing halted via e-stop", df_chart, "emergency stop activated"
         )
 
     if frame is None or model is None:
         status_txt = "⚠️ Model file missing!" if model is None else "No Frame Input"
         empty_frame = np.zeros((480, 640, 3), dtype=np.uint8)
-        return empty_frame, "0 FPS", "0.0%", "0 WPM", "0.0%", "$0.00", df_rates, status_txt, "Waiting...", df_chart,"",""
+        return empty_frame, "0 FPS", "0.0%", "0 WPM", "0.0%", "$0.00", df_rates, status_txt, "Waiting...", df_chart, "", ""
 
     current_time = time.time()
     cleanup_tracking_memory(current_time)
@@ -450,15 +456,14 @@ def process_single_frame(frame):
     prev_frame_time = current_time
     fps_display = f"{int(fps)} FPS"
 
-
     enhanced_frame = cv2.cvtColor(np.array(frame), cv2.COLOR_RGB2BGR)
     frame_h, frame_w, _ = enhanced_frame.shape
     trigger_y = int(frame_h * TRIGGER_LINE_RATIO)
     
+   
     results = model.track(
-        np.array(frame), imgsz=640, conf=0.15, iou=0.60, persist=True, tracker="bytetrack.yaml", verbose=False
+        np.array(frame), imgsz=640, conf=0.35, iou=0.60, persist=True, tracker="bytetrack.yaml", verbose=False, device=device
     )[0]
-
 
     clean_frame_for_analysis = enhanced_frame.copy()
 
@@ -471,34 +476,36 @@ def process_single_frame(frame):
 
         for box, track_id, cls_id, conf in zip(boxes, track_ids, cls_ids, confs):
             raw_class_name = model.names[cls_id]
-            if raw_class_name in CLASS_MAPPING:
-                mapped_class = CLASS_MAPPING[raw_class_name]
-                x1, y1, x2, y2 = map(int, box)
-                cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
+            
+            
+            final_5_category = CATEGORY_5_MAP.get(raw_class_name, "Waste")
+            
+            x1, y1, x2, y2 = map(int, box)
+            cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
 
-                track_last_seen[int(track_id)] = current_time
+            track_last_seen[int(track_id)] = current_time
 
-                detected_batch.append({
-                    "track_id": int(track_id),
-                    "class": mapped_class,
-                    "confidence": float(conf),
-                    "bbox": (x1, y1, x2, y2),
-                    "center_x": cx,
-                    "center_y": cy,
-                })
+            detected_batch.append({
+                "track_id": int(track_id),
+                "raw_class": raw_class_name,        
+                "class": final_5_category,         
+                "confidence": float(conf),
+                "bbox": (x1, y1, x2, y2),
+                "center_x": cx,
+                "center_y": cy,
+            })
 
-                # These overlays are drawn ONLY on enhanced_frame (the display
-                # copy). clean_frame_for_analysis remains untouched.
-                cv2.rectangle(enhanced_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                cv2.circle(enhanced_frame, (cx, cy), 4, (255, 0, 0), -1)
-                cv2.putText(
-                    enhanced_frame, f"ID:{track_id} {mapped_class} {conf:.1%}",
-                    (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2
-                )
+        
+            cv2.rectangle(enhanced_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+            cv2.circle(enhanced_frame, (cx, cy), 4, (255, 0, 0), -1)
+            cv2.putText(
+                enhanced_frame, f"ID:{track_id} {final_5_category} ({raw_class_name}) {conf:.1%}",
+                (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2
+            )
 
     with state_lock:
         check_and_update_conveyor_status()
-        target, control_log, payload_display ,payload_json= advanced_robot_logic(
+        target, control_log, payload_display, payload_json = advanced_robot_logic(
             detected_batch, clean_frame_for_analysis, frame_w, frame_h
         )
 
@@ -535,18 +542,9 @@ def process_single_frame(frame):
 
     current_dt = total_downtime + ((current_time - downtime_start_marker) if downtime_start_marker else 0.0)
 
-
-
-
-
     elapsed_time = max(0.001, current_time - start_time)
-
-
     operating_time = max(0.001, elapsed_time - current_dt)
-
-
     availability = max(0.0, min(1.0, operating_time / elapsed_time))
-
 
     if total > 0:
         actual_cycle_time = operating_time / total
@@ -555,11 +553,6 @@ def process_single_frame(frame):
         performance = 0.0
       
     quality = max(0.0, min(1.0, avg_conf_raw)) if total > 0 else 0.0
-
-
-
-
-
 
     oee_score = (availability * performance * quality) * 100.0 if total > 0 else 0.0
     oee_display = f"{oee_score:.1f}% (DT: {int(current_dt)}s)"
@@ -577,23 +570,17 @@ def process_single_frame(frame):
     df_chart = pd.DataFrame(time_series_data)
     logs_display = "\n".join(log_history[:8])
 
-
-
     if payload_json is not None:
-        arduino_log_out.insert(0,payload_json) 
+        arduino_log_out.insert(0, payload_json) 
     
-    if len(arduino_log_out)>3:
+    if len(arduino_log_out) > 3:
         arduino_log_out.pop(-1)
 
-
-        
     if payload_display is not None:
-        payload.insert(0,payload_display) 
+        payload.insert(0, payload_display) 
     
-    if len(payload)>3:
+    if len(payload) > 3:
         payload.pop(-1)
-
-
 
     enhanced_frame = cv2.cvtColor(enhanced_frame, cv2.COLOR_BGR2RGB)
     return (
@@ -608,8 +595,6 @@ def process_single_frame(frame):
         payload[0] if payload else " ",
         df_chart,
         arduino_log_out[0] if arduino_log_out else " ",
-        
-
     )
 
 
@@ -689,6 +674,7 @@ def ensure_val_dataset_exists(val_dir_path, zip_path):
 
     valid_extensions = ("*.jpg", "*.jpeg", "*.png", "*.bmp", "*.webp")
     images_val_path = os.path.join(val_dir_path, "images", "val")
+
     has_images = False
     if os.path.exists(val_dir_path) and os.listdir(val_dir_path):
         if os.path.exists(images_val_path):
@@ -696,7 +682,7 @@ def ensure_val_dataset_exists(val_dir_path, zip_path):
                 if glob.glob(os.path.join(images_val_path, ext)):
                     has_images = True
                     break
-    
+
         
         if has_images:
             return True, "Dataset exists and is valid."
@@ -767,8 +753,8 @@ def evaluate_model_benchmark():
             data=temp_yaml_path,
             verbose=False,
             imgsz=640,
-            save=False,
-            plots=False,
+            save=True,
+            plots=True,
             project=runs_temp_dir, 
             name="val_results",
         )
@@ -811,7 +797,7 @@ def reset_system_metrics():
         system_metrics = {
             "total_count": 0, "confidence_sum": 0.0, "total_revenue": 0.0,
         }
-        for k in CLASS_MAPPING.keys():
+        for k in TARGET_5_CLASSES:
             system_metrics[k] = 0
 
         bin_fill_level = {k: 0 for k in BIN_CAPACITIES}
@@ -838,8 +824,6 @@ def reset_system_metrics():
         empty_frame, "0 FPS", "0.0%", "0 WPM", "0.0%", "$0.00", df_rates,
         reset_log, "Waiting for object on Trigger Line...", pd.DataFrame(time_series_data)
     )
-
-
 
 
 
@@ -938,7 +922,7 @@ def toggle_source(mode):
 custom_css = """
 /* set the total screen space*/
 .gradio-container {
- 
+  
     max-width: 2600px !important;
     margin: 30px !important;
     padding: 20px !important;
@@ -1305,6 +1289,7 @@ with gr.Blocks(title="ECO-SORT AI | Smart Waste Automation") as demo:
             input_video = gr.Video(label="Upload Conveyor Video File", visible=False)
 
             
+            
             btn_analyze = gr.Button(" Start Analysis", visible=False,elem_classes=["btn-start_to_analyze"])
 
             output_cam = gr.Image(show_label=False, type="numpy", label="Processed Stream")
@@ -1313,19 +1298,19 @@ with gr.Blocks(title="ECO-SORT AI | Smart Waste Automation") as demo:
         with gr.Column(scale=1,elem_classes=["metric-card"]):
             gr.Markdown("Bin Capacities & Evacuation")
             rates_table = gr.Dataframe(value=get_current_rates_df(), interactive=False)
-           
+            
         
             with gr.Row():
                 select_bin_dropdown = gr.Dropdown(
                     
-                    choices=list(CLASS_MAPPING.keys()),
+                    choices=TARGET_5_CLASSES,
                     label="Select Bin to Clear",
-                    value="Plastic container",
+                    value="Plastic",
                     scale=2,
                     elem_classes=["metric-card"]
                 )
 
-                btn_empty_bin = gr.Button(" Empty Bin", scale=1,elem_classes=["btn_empty_bin"])
+                btn_empty_bin = gr.Button("Empty Bin", scale=1,elem_classes=["btn_empty_bin"])
 
             gr.Markdown(" Kinematics & Serial Payload")
             kinematics_payload_box = gr.Textbox(
@@ -1336,8 +1321,8 @@ with gr.Blocks(title="ECO-SORT AI | Smart Waste Automation") as demo:
             control_logs = gr.Textbox(lines=4, interactive=False, label="Priority Event Log")
 
             with gr.Row():
-                btn_eval = gr.Button(" Run  Benchmark",elem_classes=["btn-map"])
-                btn_reset = gr.Button(" Reset Metrics",elem_classes=["btn-reset-m"])
+                btn_eval = gr.Button("Run Benchmark",elem_classes=["btn-map"])
+                btn_reset = gr.Button("Reset Metrics",elem_classes=["btn-reset-m"])
             
             eval_output = gr.Markdown()
 
@@ -1346,7 +1331,7 @@ with gr.Blocks(title="ECO-SORT AI | Smart Waste Automation") as demo:
             with gr.Column():
                 
                 arduino_log_box = gr.Textbox(
-                    label="Live Robot|Arduino Input",
+                    label="Live Robot | Arduino Input",
                     placeholder="Waiting for object detection and command transmission...",
                     lines=12,
                     max_lines=20,
