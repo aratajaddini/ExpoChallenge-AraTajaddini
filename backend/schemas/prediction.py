@@ -1,16 +1,30 @@
 from pydantic import BaseModel
-from typing import Dict
+
 
 class PredictionResponse(BaseModel):
     id: int
     filename: str
-    top_class: str        # ✅ keep as top_class for /predict
+    top_class: str
     confidence: float
-    scores: Dict[str, float]
+    scores: dict[str, float]
+
+
+class FrameResult(BaseModel):
+    timestamp: float
+    top_class: str
+    confidence: float
+
+
+class VideoPredictionResponse(PredictionResponse):
+    frames_analyzed: int
+    class_counts: dict[str, int]
+    timeline: list[FrameResult]
+
 
 class HistoryItem(BaseModel):
     id: int
     filename: str
-    predicted_class: str  # ✅ changed from top_class to predicted_class
+    predicted_class: str
     confidence: float
+    source: str
     created_at: str

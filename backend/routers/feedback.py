@@ -1,15 +1,24 @@
-from fastapi import APIRouter, HTTPException
+"""Collect user corrections for past predictions."""
+from fastapi import APIRouter, Depends, HTTPException
+
 from backend.models.database import get_conn
 from backend.schemas.feedback import FeedbackRequest, FeedbackResponse
+from backend.security import require_api_key
 
-router = APIRouter(prefix="/feedback", tags=["feedback"])
+router = APIRouter(
+    prefix="/feedback",
+    tags=["feedback"],
+    dependencies=[Depends(require_api_key)],
+)
 
 
 @router.post("", response_model=FeedbackResponse)
-async def feedback(payload: FeedbackRequest):
+def submit_feedback(payload: FeedbackRequest) -> FeedbackResponse:
+    """Attach a corrected label to an existing prediction."""
     with get_conn() as conn:
         exists = conn.execute(
-            "SELECT id FROM predictions WHERE id = ?", (payload.prediction_id,)
+            "SELECT id FROM predictions WHERE id = ?",
+            (payload.prediction_id,),
         ).fetchone()
         if not exists:
             raise HTTPException(status_code=404, detail="prediction not found")
