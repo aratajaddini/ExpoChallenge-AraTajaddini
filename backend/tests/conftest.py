@@ -3,7 +3,9 @@ import os
 import pytest
 from fastapi.testclient import TestClient
 
+# Set environment variables before importing the app so config picks them up
 os.environ["API_KEY"] = "testing_key"
+os.environ["REQUIRE_MODEL"] = "0"   # CI has no best.pt; model is mocked
 
 from backend.main import app
 import backend.inference as inference_module

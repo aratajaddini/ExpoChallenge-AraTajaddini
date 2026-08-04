@@ -7,6 +7,7 @@ No hard-coded class names — see inference.get_class_names().
 from __future__ import annotations
 
 import os
+import warnings
 from pathlib import Path
 
 BASE_DIR = Path(__file__).parent
@@ -131,6 +132,11 @@ KB_RRF_K: int = _env_int("KB_RRF_K", 60)
 # 0.35 is a placeholder — set it with tools/calibrate_kb.py.
 KB_MIN_COSINE: float = _env_float("KB_MIN_COSINE", 0.35)
 
+# --------------------------------------------------------------------------- #
+# Model requirement (optional soft check)
+# --------------------------------------------------------------------------- #
+REQUIRE_MODEL: bool = _env_str("REQUIRE_MODEL", "1").lower() not in {"0", "false", "no"}
+
 
 # --------------------------------------------------------------------------- #
 # Runtime setup / validation
@@ -159,7 +165,12 @@ def assert_configured() -> None:
             "API_KEY is not set. Add it to .env (or the environment) before starting."
         )
     if not MODEL_PATH.is_file():
-        raise RuntimeError(f"Model weights not found: {MODEL_PATH}")
+        if REQUIRE_MODEL:
+            raise RuntimeError(f"Model weights not found: {MODEL_PATH}")
+        warnings.warn(
+            f"Model weights not found: {MODEL_PATH}; /predict will fail.",
+            stacklevel=2,
+        )
     if not ALLOWED_ORIGINS:
         raise RuntimeError("ALLOWED_ORIGINS is empty; CORS would block every browser call.")
     if "*" in ALLOWED_ORIGINS:
