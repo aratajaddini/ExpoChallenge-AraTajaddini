@@ -11,8 +11,8 @@ import re
 from typing import Final
 
 _ASK_HINT: Final = (
-    "Try: \"Which waste classes can the system recognise?\", "
-    "\"What does the confidence score mean?\", or \"Why does it say uncertain?\""
+    'Try: "Which waste classes can the system recognise?", '
+    '"What does the confidence score mean?", or "Why does it say uncertain?"'
 )
 
 _SCOPE: Final = (
@@ -32,51 +32,124 @@ def _norm(text: str) -> str:
 _GROUPS: Final[tuple[tuple[tuple[str, ...], str], ...]] = (
     # --- greetings ---
     (
-        ("hello", "hi", "hey", "yo", "hiya", "hi there", "hello there",
-         "hey there", "hello bot", "hi bot", "howdy", "greetings",
-         "good morning", "good afternoon", "good evening", "good day",
-         "morning", "evening", "hallo", "guten tag", "guten morgen",
-         "hola", "bonjour", "ciao", "salut", "hej", "salam", "salaam",
-         "سلام"),
+        (
+            "hello",
+            "hi",
+            "hey",
+            "yo",
+            "hiya",
+            "hi there",
+            "hello there",
+            "hey there",
+            "hello bot",
+            "hi bot",
+            "howdy",
+            "greetings",
+            "good morning",
+            "good afternoon",
+            "good evening",
+            "good day",
+            "morning",
+            "evening",
+            "hallo",
+            "guten tag",
+            "guten morgen",
+            "hola",
+            "bonjour",
+            "ciao",
+            "salut",
+            "hej",
+            "salam",
+            "salaam",
+            "سلام",
+        ),
         "Hello. I'm the documentation assistant for smart-waste-robot. I answer "
-        "from the project's local docs and cite the exact section I used. "
-        + _ASK_HINT,
+        "from the project's local docs and cite the exact section I used. " + _ASK_HINT,
     ),
     # --- presence / liveness checks ---
     (
-        ("test", "testing", "ping", "are you there", "are you online",
-         "are you working", "do you work", "you there", "anyone there",
-         "is this working", "does this work", "hello are you there"),
+        (
+            "test",
+            "testing",
+            "ping",
+            "are you there",
+            "are you online",
+            "are you working",
+            "do you work",
+            "you there",
+            "anyone there",
+            "is this working",
+            "does this work",
+            "hello are you there",
+        ),
         "I'm online and the knowledge base is loaded. Ask a question about the "
         "system and I'll answer with its source. " + _ASK_HINT,
     ),
     # --- how are you ---
     (
-        ("how are you", "how are you doing", "how is it going", "hows it going",
-         "how do you do", "you ok", "are you ok", "whats up", "sup",
-         "wie gehts", "wie geht es dir"),
+        (
+            "how are you",
+            "how are you doing",
+            "how is it going",
+            "hows it going",
+            "how do you do",
+            "you ok",
+            "are you ok",
+            "whats up",
+            "sup",
+            "wie gehts",
+            "wie geht es dir",
+        ),
         "Running fine. Ask me anything documented about the waste classes, the "
         "detection pipeline, the API, or the training setup.",
     ),
     # --- identity ---
     (
-        ("who are you", "what are you", "whats your name", "what is your name",
-         "your name", "who am i talking to", "what should i call you",
-         "introduce yourself", "tell me about yourself", "who is this",
-         "are you a bot", "are you a robot", "are you human", "are you a person",
-         "are you real"),
+        (
+            "who are you",
+            "what are you",
+            "whats your name",
+            "what is your name",
+            "your name",
+            "who am i talking to",
+            "what should i call you",
+            "introduce yourself",
+            "tell me about yourself",
+            "who is this",
+            "are you a bot",
+            "are you a robot",
+            "are you human",
+            "are you a person",
+            "are you real",
+        ),
         "I'm the documentation assistant for smart-waste-robot. I search the "
         "project's local Markdown docs, return the matching passages, and show "
         "which file and section each answer came from.",
     ),
     # --- capabilities ---
     (
-        ("what can you do", "what do you do", "help", "help me",
-         "can you help", "can you help me", "what can i ask",
-         "what can i ask you", "what should i ask", "what should i ask you",
-         "what questions can you answer", "what do you know",
-         "what topics do you cover", "how do i use this", "how does this work",
-         "how do i use you", "commands", "options", "menu", "start"),
+        (
+            "what can you do",
+            "what do you do",
+            "help",
+            "help me",
+            "can you help",
+            "can you help me",
+            "what can i ask",
+            "what can i ask you",
+            "what should i ask",
+            "what should i ask you",
+            "what questions can you answer",
+            "what do you know",
+            "what topics do you cover",
+            "how do i use this",
+            "how does this work",
+            "how do i use you",
+            "commands",
+            "options",
+            "menu",
+            "start",
+        ),
         "I answer documented questions about smart-waste-robot: the waste "
         "classes, confidence and uncertainty, the detection pipeline, the API "
         "endpoints, API keys, failure modes, and how the model was trained. "
@@ -84,100 +157,238 @@ _GROUPS: Final[tuple[tuple[tuple[str, ...], str], ...]] = (
     ),
     # --- who built it ---
     (
-        ("who made you", "who built you", "who created you", "who developed you",
-         "who wrote this", "who is behind this", "who made this",
-         "who built this", "who is the developer", "whos the developer",
-         "who is the team", "team", "your creator", "your author"),
+        (
+            "who made you",
+            "who built you",
+            "who created you",
+            "who developed you",
+            "who wrote this",
+            "who is behind this",
+            "who made this",
+            "who built this",
+            "who is the developer",
+            "whos the developer",
+            "who is the team",
+            "team",
+            "your creator",
+            "your author",
+        ),
         "smart-waste-robot is built by a dedicated team of engineers working "
         "on AI, documentation, and support. The project was developed as part "
         "of an AI challenge to make recycling smarter and more efficient.",
     ),
     # --- languages ---
     (
-        ("what languages do you speak", "which languages do you support",
-         "do you speak german", "do you speak spanish", "do you speak french",
-         "sprichst du deutsch", "parlez vous francais", "hablas espanol",
-         "can you speak german", "can you speak spanish", "can you speak french"),
+        (
+            "what languages do you speak",
+            "which languages do you support",
+            "do you speak german",
+            "do you speak spanish",
+            "do you speak french",
+            "sprichst du deutsch",
+            "parlez vous francais",
+            "hablas espanol",
+            "can you speak german",
+            "can you speak spanish",
+            "can you speak french",
+        ),
         "The knowledge base is written in English, so my answers are in English. "
         "You can ask in another language, but the retrieved passages will still "
         "be English.",
     ),
     # --- thanks ---
     (
-        ("thanks", "thank you", "thanks a lot", "thank you very much",
-         "many thanks", "thx", "ty", "tysm", "cheers", "appreciate it",
-         "much appreciated", "nice one", "danke", "danke schon", "vielen dank",
-         "merci", "gracias", "ممنون"),
+        (
+            "thanks",
+            "thank you",
+            "thanks a lot",
+            "thank you very much",
+            "many thanks",
+            "thx",
+            "ty",
+            "tysm",
+            "cheers",
+            "appreciate it",
+            "much appreciated",
+            "nice one",
+            "danke",
+            "danke schon",
+            "vielen dank",
+            "merci",
+            "gracias",
+            "ممنون",
+        ),
         "You're welcome. Ask away if you need anything else from the docs.",
     ),
     # --- acknowledgements ---
     (
-        ("ok", "okay", "k", "kk", "cool", "nice", "great", "good", "alright",
-         "got it", "understood", "i see", "makes sense", "fine", "sure",
-         "perfect", "awesome", "yes", "yep", "yeah", "no", "nope", "nah",
-         "ok thanks", "ok thank you"),
+        (
+            "ok",
+            "okay",
+            "k",
+            "kk",
+            "cool",
+            "nice",
+            "great",
+            "good",
+            "alright",
+            "got it",
+            "understood",
+            "i see",
+            "makes sense",
+            "fine",
+            "sure",
+            "perfect",
+            "awesome",
+            "yes",
+            "yep",
+            "yeah",
+            "no",
+            "nope",
+            "nah",
+            "ok thanks",
+            "ok thank you",
+        ),
         "Noted. " + _ASK_HINT,
     ),
     # --- goodbye ---
     (
-        ("bye", "goodbye", "good bye", "see you", "see ya", "cya", "later",
-         "see you later", "take care", "good night", "night", "im done",
-         "thats all", "that is all", "ciao", "tschuss", "auf wiedersehen",
-         "adios", "au revoir"),
+        (
+            "bye",
+            "goodbye",
+            "good bye",
+            "see you",
+            "see ya",
+            "cya",
+            "later",
+            "see you later",
+            "take care",
+            "good night",
+            "night",
+            "im done",
+            "thats all",
+            "that is all",
+            "ciao",
+            "tschuss",
+            "auf wiedersehen",
+            "adios",
+            "au revoir",
+        ),
         "Goodbye. The docs stay available whenever you come back.",
     ),
     # --- apologies / confusion ---
     (
-        ("sorry", "my bad", "oops", "nevermind", "never mind", "ignore that",
-         "forget it", "what", "huh", "pardon", "come again", "say that again",
-         "repeat", "repeat that", "i dont understand", "im confused",
-         "that makes no sense"),
+        (
+            "sorry",
+            "my bad",
+            "oops",
+            "nevermind",
+            "never mind",
+            "ignore that",
+            "forget it",
+            "what",
+            "huh",
+            "pardon",
+            "come again",
+            "say that again",
+            "repeat",
+            "repeat that",
+            "i dont understand",
+            "im confused",
+            "that makes no sense",
+        ),
         "No problem. Rephrase the question and I'll search the docs again. "
         + _ASK_HINT,
     ),
     # --- frustration ---
     (
-        ("this doesnt work", "it doesnt work", "youre useless", "you are useless",
-         "you are wrong", "youre wrong", "thats wrong", "bad answer",
-         "wrong answer", "you dont know anything", "this is broken",
-         "not helpful", "that didnt help"),
+        (
+            "this doesnt work",
+            "it doesnt work",
+            "youre useless",
+            "you are useless",
+            "you are wrong",
+            "youre wrong",
+            "thats wrong",
+            "bad answer",
+            "wrong answer",
+            "you dont know anything",
+            "this is broken",
+            "not helpful",
+            "that didnt help",
+        ),
         "Sorry that missed. I can only return what the docs contain, so a more "
         "specific wording usually helps. You can also check which file should "
         "cover the topic under backend/docs/kb/.",
     ),
     # --- out of scope: general assistant requests ---
     (
-        ("write code for me", "write me some code", "can you write code",
-         "can you code", "do my homework", "write an essay", "tell me a story",
-         "translate this", "summarise the internet", "search the web",
-         "google it", "what is python", "explain machine learning",
-         "teach me python"),
+        (
+            "write code for me",
+            "write me some code",
+            "can you write code",
+            "can you code",
+            "do my homework",
+            "write an essay",
+            "tell me a story",
+            "translate this",
+            "summarise the internet",
+            "search the web",
+            "google it",
+            "what is python",
+            "explain machine learning",
+            "teach me python",
+        ),
         _SCOPE,
     ),
     # --- out of scope: real-world facts ---
     (
-        ("what time is it", "whats the time", "what is the time",
-         "what is todays date", "whats the date", "what day is it",
-         "whats the weather", "what is the weather", "how is the weather",
-         "where are you", "what is your location", "wie ist das wetter"),
+        (
+            "what time is it",
+            "whats the time",
+            "what is the time",
+            "what is todays date",
+            "whats the date",
+            "what day is it",
+            "whats the weather",
+            "what is the weather",
+            "how is the weather",
+            "where are you",
+            "what is your location",
+            "wie ist das wetter",
+        ),
         "I don't have access to the clock, the calendar, or the internet. I only "
         "read this project's documentation.",
     ),
     # --- fun ---
     (
-        ("tell me a joke", "say something funny", "are you funny", "sing a song",
-         "do you like me", "do you have feelings", "are you alive",
-         "are you conscious", "do you dream", "whats your favourite class",
-         "whats your favorite class"),
-        "Not my department. I sort documentation, the robot sorts waste. "
-        + _ASK_HINT,
+        (
+            "tell me a joke",
+            "say something funny",
+            "are you funny",
+            "sing a song",
+            "do you like me",
+            "do you have feelings",
+            "are you alive",
+            "are you conscious",
+            "do you dream",
+            "whats your favourite class",
+            "whats your favorite class",
+        ),
+        "Not my department. I sort documentation, the robot sorts waste. " + _ASK_HINT,
     ),
     # --- about the project ---
     (
-        ("what is smart waste robot", "what is smart-waste-robot",
-         "what is this project", "tell me about the project",
-         "what does the system do", "what is the purpose",
-         "what is the goal", "what is this all about"),
+        (
+            "what is smart waste robot",
+            "what is smart-waste-robot",
+            "what is this project",
+            "tell me about the project",
+            "what does the system do",
+            "what is the purpose",
+            "what is the goal",
+            "what is this all about",
+        ),
         "smart-waste-robot is an AI-powered waste sorting system. It uses a "
         "camera and a YOLOv8 model to classify waste into categories: "
         "Plastic, Metal, Paper, Glass, and Organic. The classification triggers "
@@ -185,9 +396,13 @@ _GROUPS: Final[tuple[tuple[tuple[str, ...], str], ...]] = (
     ),
     # --- about the problem ---
     (
-        ("why is waste management important", "why is recycling important",
-         "what is the problem with waste", "why do we need waste sorting",
-         "what is the waste problem"),
+        (
+            "why is waste management important",
+            "why is recycling important",
+            "what is the problem with waste",
+            "why do we need waste sorting",
+            "what is the waste problem",
+        ),
         "Waste generation has increased dramatically worldwide. Effective "
         "waste sorting and recycling are essential to reduce environmental "
         "pollution, conserve natural resources, and minimise landfill use. "
@@ -196,9 +411,17 @@ _GROUPS: Final[tuple[tuple[tuple[str, ...], str], ...]] = (
     ),
     # --- about the model ---
     (
-        ("what model do you use", "which model is used", "what is the model",
-         "what is yolo", "what is yolo v8", "what is yolov8",
-         "why yolo", "how does the model work", "what is the architecture"),
+        (
+            "what model do you use",
+            "which model is used",
+            "what is the model",
+            "what is yolo",
+            "what is yolo v8",
+            "what is yolov8",
+            "why yolo",
+            "how does the model work",
+            "what is the architecture",
+        ),
         "The system uses YOLOv8, a state-of-the-art real-time object detection "
         "model. It is trained on the TrashNet dataset, which contains images "
         "of waste items across several classes. The model achieves fast "
@@ -206,9 +429,15 @@ _GROUPS: Final[tuple[tuple[tuple[str, ...], str], ...]] = (
     ),
     # --- about the dataset ---
     (
-        ("what dataset was used", "which dataset", "what is trashnet",
-         "tell me about trashnet", "how many images", "what classes",
-         "waste classes"),   # "what are the classes" removed
+        (
+            "what dataset was used",
+            "which dataset",
+            "what is trashnet",
+            "tell me about trashnet",
+            "how many images",
+            "what classes",
+            "waste classes",
+        ),  # "what are the classes" removed
         "The model is trained on TrashNet, a dataset containing images of "
         "waste items divided into six classes: Plastic, Metal, Paper, Glass, "
         "Cardboard, and Organic/Trash. The dataset is publicly available and "
@@ -216,8 +445,14 @@ _GROUPS: Final[tuple[tuple[tuple[str, ...], str], ...]] = (
     ),
     # --- about confidence ---
     (
-        ("what does confidence mean", "confidence score", "how is confidence computed",
-         "why is confidence low", "what is a good confidence", "confidence threshold"),
+        (
+            "what does confidence mean",
+            "confidence score",
+            "how is confidence computed",
+            "why is confidence low",
+            "what is a good confidence",
+            "confidence threshold",
+        ),
         "The confidence score represents the probability the model assigns to "
         "its top prediction. A score of 0.85 means the model is 85% certain. "
         "Scores below the threshold (0.35 by default) are considered uncertain, "
@@ -225,8 +460,13 @@ _GROUPS: Final[tuple[tuple[tuple[str, ...], str], ...]] = (
     ),
     # --- about the pipeline ---
     (
-        ("what is the pipeline", "how does the system work step by step",
-         "explain the workflow", "from image to sorting", "what happens after detection"),
+        (
+            "what is the pipeline",
+            "how does the system work step by step",
+            "explain the workflow",
+            "from image to sorting",
+            "what happens after detection",
+        ),
         "The pipeline: 1) Capture an image or video frame. 2) Run the YOLOv8 "
         "model to classify the waste. 3) Extract the top class and confidence. "
         "4) Send the result to the sorting mechanism (actuator) to separate "
@@ -234,9 +474,15 @@ _GROUPS: Final[tuple[tuple[tuple[str, ...], str], ...]] = (
     ),
     # --- about the API ---
     (
-        ("what is the api", "what endpoints are available", "how to call the api",
-         "api documentation", "how to use the api", "what is the api key",
-         "how to authenticate"),
+        (
+            "what is the api",
+            "what endpoints are available",
+            "how to call the api",
+            "api documentation",
+            "how to use the api",
+            "what is the api key",
+            "how to authenticate",
+        ),
         "The API provides endpoints for classification (/predict), history "
         "(/history), feedback (/feedback), and chat (/chat). All requests "
         "require an X-API-Key header. Use the admin key (from .env) or a shift "
@@ -244,8 +490,15 @@ _GROUPS: Final[tuple[tuple[tuple[str, ...], str], ...]] = (
     ),
     # --- about API keys ---
     (
-        ("how to get an api key", "how to create an api key", "mint a key",
-         "shift key", "keymaker", "how to generate a key", "what is a shift key"),
+        (
+            "how to get an api key",
+            "how to create an api key",
+            "mint a key",
+            "shift key",
+            "keymaker",
+            "how to generate a key",
+            "what is a shift key",
+        ),
         "API keys can be generated using the tracesort-keygen tool (or the "
         "admin keymaker GUI). You need the admin API key from your .env file "
         "to mint shift keys. Shift keys expire after a set number of hours "
@@ -253,8 +506,13 @@ _GROUPS: Final[tuple[tuple[tuple[str, ...], str], ...]] = (
     ),
     # --- about history ---
     (
-        ("what is history", "how to view history", "how to clear history",
-         "history endpoint", "what does history store"),
+        (
+            "what is history",
+            "how to view history",
+            "how to clear history",
+            "history endpoint",
+            "what does history store",
+        ),
         "The system keeps a history of all classification results, including "
         "the filename, predicted class, confidence, source (image/video), "
         "and timestamp. You can fetch the last 50 entries via GET /history, "
@@ -262,16 +520,26 @@ _GROUPS: Final[tuple[tuple[tuple[str, ...], str], ...]] = (
     ),
     # --- about feedback ---
     (
-        ("what is feedback", "how to send feedback", "why is feedback important",
-         "feedback endpoint", "how to correct a prediction"),
+        (
+            "what is feedback",
+            "how to send feedback",
+            "why is feedback important",
+            "feedback endpoint",
+            "how to correct a prediction",
+        ),
         "Feedback allows you to correct a misclassification. If the model "
         "predicts the wrong class, you can send the correct class via POST "
         "/feedback. This helps improve the model and the training data over time.",
     ),
     # --- about the chat itself ---
     (
-        ("how to use this chat", "what is this chat", "how does the chat work",
-         "how does this assistant work", "what can i ask here"),
+        (
+            "how to use this chat",
+            "what is this chat",
+            "how does the chat work",
+            "how does this assistant work",
+            "what can i ask here",
+        ),
         "This chat uses a RAG (Retrieval-Augmented Generation) system. It "
         "searches the project's documentation (Markdown files in backend/docs/kb/) "
         "for the most relevant passages and presents them as a grounded answer, "
@@ -279,8 +547,12 @@ _GROUPS: Final[tuple[tuple[tuple[str, ...], str], ...]] = (
     ),
     # --- about the knowledge base ---
     (
-        ("what is the knowledge base", "how to update the knowledge base",
-         "where are the docs stored", "how to add documentation"),
+        (
+            "what is the knowledge base",
+            "how to update the knowledge base",
+            "where are the docs stored",
+            "how to add documentation",
+        ),
         "The knowledge base consists of Markdown files placed in backend/docs/kb/. "
         "To update it, add or edit a .md file there, then rebuild the index "
         "with the build_kb tool. The system will then use the new content in "
@@ -288,8 +560,13 @@ _GROUPS: Final[tuple[tuple[tuple[str, ...], str], ...]] = (
     ),
     # --- about video processing ---
     (
-        ("can you process video", "how does video work", "video inference",
-         "what about video", "how many frames are sampled"),
+        (
+            "can you process video",
+            "how does video work",
+            "video inference",
+            "what about video",
+            "how many frames are sampled",
+        ),
         "Yes, you can upload a video instead of an image. The system samples "
         "up to 120 frames (about 1 fps for a 2‑minute clip) and runs inference "
         "on each frame. The final result is the most frequently predicted class "
@@ -297,39 +574,61 @@ _GROUPS: Final[tuple[tuple[tuple[str, ...], str], ...]] = (
     ),
     # --- about hardware requirements ---
     (
-        ("what hardware is needed", "does it require gpu", "can it run on cpu",
-         "what are the system requirements", "how fast is it"),
+        (
+            "what hardware is needed",
+            "does it require gpu",
+            "can it run on cpu",
+            "what are the system requirements",
+            "how fast is it",
+        ),
         "The model can run on CPU, but a GPU is recommended for real‑time "
         "performance. Inference speed is around 50‑100ms per image on a modern "
         "GPU. Video processing takes longer due to the extra frames.",
     ),
     # --- about the optional detector ---
     (
-        ("what is the optional detector", "what is the detection model",
-         "what other models are used"),
+        (
+            "what is the optional detector",
+            "what is the detection model",
+            "what other models are used",
+        ),
         "There is an optional analytics detector based on the TACO dataset "
         "for detecting larger objects like bins and bags, but it is not used "
         "in the main waste‑sorting pipeline. It remains a separate component.",
     ),
     # --- about the frontend demo ---
     (
-        ("how to use the demo", "how does the demo work", "what is the demo",
-         "launch demo", "what can i do in the demo"),
+        (
+            "how to use the demo",
+            "how does the demo work",
+            "what is the demo",
+            "launch demo",
+            "what can i do in the demo",
+        ),
         "The frontend demo lets you upload an image or video, set an API key, "
         "and see the classification result with confidence scores and a history "
         "of past predictions. You can also submit feedback to correct errors.",
     ),
     # --- about the team ---
     (
-        ("who are the developers", "tell me about the team", "who are the contributors"),
+        (
+            "who are the developers",
+            "tell me about the team",
+            "who are the contributors",
+        ),
         "The project was built by a team of engineers as part of an AI challenge. "
         "The team includes developers working on AI models, documentation, "
         "and support.",
     ),
     # --- about training and accuracy ---
     (
-        ("how accurate is the model", "what is the accuracy", "how well does it perform",
-         "what is the precision", "what is the recall"),
+        (
+            "how accurate is the model",
+            "what is the accuracy",
+            "how well does it perform",
+            "what is the precision",
+            "what is the recall",
+        ),
         "The model achieves over 90% accuracy on the test set. Performance "
         "varies by class – some materials like glass and plastic can be harder "
         "to distinguish. The system uses a confidence threshold to reduce "
@@ -337,8 +636,13 @@ _GROUPS: Final[tuple[tuple[tuple[str, ...], str], ...]] = (
     ),
     # --- about error handling ---
     (
-        ("what if the model fails", "what if it's uncertain", "what happens on low confidence",
-         "what if no class is detected", "how to handle errors"),
+        (
+            "what if the model fails",
+            "what if it's uncertain",
+            "what happens on low confidence",
+            "what if no class is detected",
+            "how to handle errors",
+        ),
         "If the confidence is below the threshold, the system returns an error "
         "message indicating that the prediction is uncertain. You can retry "
         "with a better image, or manually sort the item. The feedback system "
@@ -346,8 +650,12 @@ _GROUPS: Final[tuple[tuple[tuple[str, ...], str], ...]] = (
     ),
     # --- about the sorting mechanism ---
     (
-        ("how does sorting work", "what is the actuator", "what happens physically",
-         "how does the robot sort"),
+        (
+            "how does sorting work",
+            "what is the actuator",
+            "what happens physically",
+            "how does the robot sort",
+        ),
         "After classification, the result is sent to a hardware actuator "
         "that physically moves the waste item to the correct bin. The exact "
         "implementation depends on your setup; the software provides the "
@@ -355,8 +663,12 @@ _GROUPS: Final[tuple[tuple[tuple[str, ...], str], ...]] = (
     ),
     # --- about the developer environment ---
     (
-        ("how to set up the project", "how to run the server",
-         "how to start the app", "what are the dependencies"),
+        (
+            "how to set up the project",
+            "how to run the server",
+            "how to start the app",
+            "what are the dependencies",
+        ),
         "Clone the repository, create a virtual environment, install dependencies "
         "from requirements.txt, set your API key in a .env file, and run "
         "the server. The frontend is served from the /frontend folder. "
@@ -364,32 +676,49 @@ _GROUPS: Final[tuple[tuple[tuple[str, ...], str], ...]] = (
     ),
     # --- about the open-source license ---
     (
-        ("is it open source", "what is the license", "can i contribute",
-         "how to contribute", "can i fork it"),
+        (
+            "is it open source",
+            "what is the license",
+            "can i contribute",
+            "how to contribute",
+            "can i fork it",
+        ),
         "Yes, the project is open source. You can find the code on GitHub. "
         "Contributions are welcome – feel free to fork, open issues, or submit "
         "pull requests.",
     ),
     # --- about classification output ---
     (
-        ("what does the classification result contain", "what info is returned",
-         "what fields are in the prediction", "prediction format"),
+        (
+            "what does the classification result contain",
+            "what info is returned",
+            "what fields are in the prediction",
+            "prediction format",
+        ),
         "The prediction response includes the top class name, confidence score, "
         "a full list of class scores, inference time (if available), and a "
         "record ID that can be used for feedback.",
     ),
     # --- about scoring mechanism ---
     (
-        ("how are scores calculated", "softmax", "probability distribution",
-         "why do scores sum to one"),
+        (
+            "how are scores calculated",
+            "softmax",
+            "probability distribution",
+            "why do scores sum to one",
+        ),
         "The model outputs raw logits, which are converted to probabilities "
         "using the softmax function. This ensures the scores for all classes "
         "sum to 1.0. The highest score is the predicted class.",
     ),
     # --- about the web interface ---
     (
-        ("what is the web interface", "is there a dashboard", "web ui",
-         "frontend features"),
+        (
+            "what is the web interface",
+            "is there a dashboard",
+            "web ui",
+            "frontend features",
+        ),
         "The frontend provides a dark-themed dashboard where you can upload "
         "images or videos, view classification results with confidence bars, "
         "see a history of predictions, and correct misclassifications via "
@@ -459,7 +788,12 @@ _GROUPS: Final[tuple[tuple[tuple[str, ...], str], ...]] = (
     ),
     # --- about the frontend framework ---
     (
-        ("frontend framework", "javascript", "html css", "what is the frontend built with"),
+        (
+            "frontend framework",
+            "javascript",
+            "html css",
+            "what is the frontend built with",
+        ),
         "The frontend is built with plain HTML, CSS, and JavaScript, with no "
         "heavy frameworks, making it lightweight and easy to modify. It uses "
         "sessionStorage for API key persistence.",
@@ -481,8 +815,12 @@ _GROUPS: Final[tuple[tuple[tuple[str, ...], str], ...]] = (
     ),
     # --- about training data details ---
     (
-        ("training data details", "how was the data prepared", "data augmentation",
-         "preprocessing"),
+        (
+            "training data details",
+            "how was the data prepared",
+            "data augmentation",
+            "preprocessing",
+        ),
         "The TrashNet dataset was used with standard augmentation techniques "
         "to improve generalisation. Images were resized to the input size "
         "required by YOLOv8.",
@@ -765,8 +1103,11 @@ _GROUPS: Final[tuple[tuple[tuple[str, ...], str], ...]] = (
         "be added with retraining.",
     ),
     (
-        ("what is the accuracy on real-world images", "real-world performance",
-         "how does it perform in the wild"),
+        (
+            "what is the accuracy on real-world images",
+            "real-world performance",
+            "how does it perform in the wild",
+        ),
         "While the model achieves high accuracy on benchmark datasets, "
         "real-world performance depends on image quality, lighting, and "
         "background complexity. The system includes a confidence threshold "
@@ -832,7 +1173,9 @@ _PATTERNS: Final[tuple[tuple[re.Pattern[str], str], ...]] = (
         _EXACT["how are you"],
     ),
     (
-        re.compile(r"^(what|which) (is|are) (the )?waste (classes|categories)\b.{0,20}$"),
+        re.compile(
+            r"^(what|which) (is|are) (the )?waste (classes|categories)\b.{0,20}$"
+        ),
         _EXACT["waste classes"],
     ),
     (
@@ -848,7 +1191,9 @@ _PATTERNS: Final[tuple[tuple[re.Pattern[str], str], ...]] = (
         _EXACT["what endpoints are available"],
     ),
     (
-        re.compile(r"^(how|where) (do|can) i (get|create|generate) an api key\b.{0,20}$"),
+        re.compile(
+            r"^(how|where) (do|can) i (get|create|generate) an api key\b.{0,20}$"
+        ),
         _EXACT["how to get an api key"],
     ),
     (
@@ -872,11 +1217,15 @@ _PATTERNS: Final[tuple[tuple[re.Pattern[str], str], ...]] = (
         _EXACT["how accurate is the model"],
     ),
     (
-        re.compile(r"^(what|how) (is|does) (the )?hardware (work|requirement)\b.{0,15}$"),
+        re.compile(
+            r"^(what|how) (is|does) (the )?hardware (work|requirement)\b.{0,15}$"
+        ),
         _EXACT["what hardware is needed"],
     ),
     (
-        re.compile(r"^(what|how) (is|does) (the )?video (processing|inference)\b.{0,15}$"),
+        re.compile(
+            r"^(what|how) (is|does) (the )?video (processing|inference)\b.{0,15}$"
+        ),
         _EXACT["how does video work"],
     ),
     (

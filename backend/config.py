@@ -172,7 +172,9 @@ def assert_configured() -> None:
             stacklevel=2,
         )
     if not ALLOWED_ORIGINS:
-        raise RuntimeError("ALLOWED_ORIGINS is empty; CORS would block every browser call.")
+        raise RuntimeError(
+            "ALLOWED_ORIGINS is empty; CORS would block every browser call."
+        )
     if "*" in ALLOWED_ORIGINS:
         raise RuntimeError("ALLOWED_ORIGINS='*' is not allowed with API-key auth.")
     if KB_CHUNK_WORDS < 1:

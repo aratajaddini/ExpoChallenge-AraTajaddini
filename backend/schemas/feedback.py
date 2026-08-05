@@ -1,4 +1,5 @@
 """Request and response schemas for the feedback endpoint."""
+
 from pydantic import BaseModel, Field
 
 

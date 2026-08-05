@@ -1,4 +1,5 @@
 """Admin CLI to mint, list and revoke TraceSort API keys."""
+
 from __future__ import annotations
 
 import os
@@ -28,12 +29,10 @@ _resolve_frozen_db()
 
 import argparse
 import subprocess
-import sys
-from pathlib import Path
 
 # Now it's safe to import backend modules – the env var is already set.
-from backend import keys                # noqa: E402
-from backend.config import DB_PATH       # noqa: E402
+from backend import keys
+from backend.config import DB_PATH
 
 
 def _clip(text: str) -> bool:
@@ -171,7 +170,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "revoke":
             return revoke(args.key_id)
         return interactive()
-    except Exception as exc:           # noqa: BLE001 – keep the window open on error
+    except Exception as exc:  # noqa: BLE001 – keep the window open on error
         print(f"[error] {exc}")
         input("Press Enter to close...")
         return 1

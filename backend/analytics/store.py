@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Iterable, Mapping
 from datetime import datetime, timezone
-from typing import Iterable, Mapping
 
 from backend import config
 
@@ -34,8 +34,7 @@ def record_detections(
     """Persist detection results. Returns number of rows written."""
     now = datetime.now(timezone.utc).isoformat()
     rows = [
-        (str(it["class_name"]), float(it["confidence"]), source, now)
-        for it in items
+        (str(it["class_name"]), float(it["confidence"]), source, now) for it in items
     ]
     if not rows:
         return 0

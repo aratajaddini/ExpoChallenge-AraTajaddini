@@ -1,6 +1,35 @@
+[project]
+name = "smart-waste-robot"
+version = "0.1.0"
+description = "AI waste classification with conveyor belt simulation (YOLOv11)"
+requires-python = ">=3.11,<3.13"
+
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["backend/tests"]
 filterwarnings = [
     "ignore::DeprecationWarning:starlette.testclient",
 ]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+extend-exclude = ["backend/weights", "backend/data", ".venv"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"backend/tests/*" = ["B011"]
+
+[tool.mypy]
+python_version = "3.11"
+files = ["backend"]
+ignore_missing_imports = false
+warn_unused_ignores = true
+no_implicit_optional = true
+
+[[tool.mypy.overrides]]
+module = ["ultralytics.*", "cv2.*", "sentence_transformers.*", "faiss.*"]
+ignore_missing_imports = true

@@ -1,12 +1,13 @@
 """Shift-scoped API key issuing and verification (SQLite, hash-only storage)."""
+
 from __future__ import annotations
 
 import hashlib
 import secrets
 import sqlite3
+from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
-from typing import Iterator
 
 from backend.config import DB_PATH
 
@@ -34,10 +35,10 @@ def _connect() -> Iterator[sqlite3.Connection]:
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     try:
-        with conn:          # auto‑commits on success, rolls back on exception
+        with conn:  # auto‑commits on success, rolls back on exception
             yield conn
     finally:
-        conn.close()        # ✅ always close the connection
+        conn.close()  # ✅ always close the connection
 
 
 def init_schema() -> None:

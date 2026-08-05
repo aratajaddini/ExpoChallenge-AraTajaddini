@@ -1,4 +1,5 @@
 """Image and video classification endpoint."""
+
 import uuid
 from pathlib import Path
 from typing import Literal

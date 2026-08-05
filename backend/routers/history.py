@@ -1,4 +1,5 @@
 """Read and clear prediction history."""
+
 from fastapi import APIRouter, Depends, Query
 
 from backend.models.database import get_conn

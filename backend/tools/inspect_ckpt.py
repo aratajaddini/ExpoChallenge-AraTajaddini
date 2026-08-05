@@ -1,5 +1,7 @@
-import sys, torch
+import sys
 from pathlib import Path
+
+import torch
 
 path = Path(sys.argv[1])
 if not path.is_file():

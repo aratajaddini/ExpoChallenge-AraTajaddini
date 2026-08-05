@@ -1,4 +1,4 @@
-from backend.models.database import init_db, get_conn
+from backend.models.database import get_conn, init_db
 
 
 def seed():

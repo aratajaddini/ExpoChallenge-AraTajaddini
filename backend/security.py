@@ -7,7 +7,6 @@ from fastapi import Header, HTTPException, status
 
 from backend import config, keys
 
-
 logger = logging.getLogger(__name__)
 
 
