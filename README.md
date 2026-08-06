@@ -1,13 +1,14 @@
+`````markdown
 # ♻️ Smart Waste Robot
 
-**AI‑assisted conveyor sorting • YOLO vision • RAG knowledge base**
+**AI-assisted conveyor sorting • YOLO vision • RAG knowledge base**
 
 **Stack:** Python 3.11 · FastAPI · Ultralytics YOLO · OpenCV (headless) · SQLite
 
 > 💡 **Overview** — A simulated conveyor belt classifies waste into five categories
-> (plastic, metal, paper, glass, organic) with a custom‑trained YOLO detector.
-> The model is served through a FastAPI backend protected by API‑key authentication
-> and complemented by a Retrieval‑Augmented Generation chatbot for on‑the‑fly documentation.
+> (plastic, metal, paper, glass, organic) with a custom-trained YOLO detector.
+> The model is served through a FastAPI backend protected by API-key authentication
+> and complemented by a Retrieval-Augmented Generation chatbot for on-the-fly documentation.
 
 ---
 
@@ -19,7 +20,7 @@ All documents live under [`backend/docs/kb/`](backend/docs/kb/).
 
 | # | 📄 Document | Description |
 |---|---|---|
-| 01 | [**Overview**](backend/docs/kb/01-overview.md) | Goals, components & high‑level diagram |
+| 01 | [**Overview**](backend/docs/kb/01-overview.md) | Goals, components & high-level diagram |
 | 02 | [**Classes**](backend/docs/kb/02-classes.md) | Specs for the five waste classes |
 | 03 | [**Pipeline**](backend/docs/kb/03-pipeline.md) | Data flow, inference & routing |
 | 04 | [**API**](backend/docs/kb/04-api.md) | REST endpoints, request / response formats |
@@ -45,13 +46,14 @@ All documents live under [`backend/docs/kb/`](backend/docs/kb/).
 | # | 📄 Document | Description |
 |---|---|---|
 | 08 | [**Failure Modes**](backend/docs/kb/08-failure-modes.md) | Known issues & recovery strategies |
-| 09 | [**Security & Keys**](backend/docs/kb/09-security-and-keys.md) | Auth workflow, API‑key handling |
+| 09 | [**Security & Keys**](backend/docs/kb/09-security-and-keys.md) | Auth workflow, API-key handling |
 
 ---
 
 ## 🚀 Quick Start
 
 **Requirements:** Python 3.11 · Git
+
 ```bash
 git clone https://github.com/aratajaddini/smart-waste-robot.git
 cd smart-waste-robot
@@ -100,6 +102,4 @@ Run from the repository root:
 
 bash
 python -m backend.tools.build_kb
-
-Generates `backend/data/kb_index.npz` (untracked).
-```
+``
