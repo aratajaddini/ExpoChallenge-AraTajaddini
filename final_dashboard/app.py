@@ -854,7 +854,10 @@ def resize_with_aspect_ratio(image, target_size=(640, 640)):
 
 
 
-def analyze_uploaded_video(video_path):
+def analyze_uploaded_video(video_file):
+    
+    video_path = video_file.name if hasattr(video_file, 'name') else video_file
+
     if not video_path:
         df_rates = get_current_rates_df()
         empty_frame = np.zeros((480, 640, 3), dtype=np.uint8)
@@ -868,6 +871,10 @@ def analyze_uploaded_video(video_path):
     cap = cv2.VideoCapture(video_path)
     
     
+    if not cap.isOpened():
+        print(f"Error: Unable to open video file at {video_path}")
+        return
+
     video_fps = cap.get(cv2.CAP_PROP_FPS)
     if not video_fps or video_fps <= 0:
         video_fps = 30.0
@@ -892,17 +899,14 @@ def analyze_uploaded_video(video_path):
         if frame_count % skip_frames == 0 or last_processed_output is None:
             last_processed_output = process_single_frame(frame_rgb)
 
-        
         if last_processed_output is not None:
             yield last_processed_output
 
-       
         processing_time = time.time() - loop_start_time
         sleep_time = max(0.0, (target_delay * skip_frames) - processing_time)
         time.sleep(sleep_time)
 
     cap.release()
-
 
 
 
@@ -1286,7 +1290,11 @@ with gr.Blocks(title="ECO-SORT AI | Smart Waste Automation") as demo:
             )
             
 
-            input_video = gr.Video(label="Upload Conveyor Video File", visible=False)
+            input_video = gr.File(
+                label="Upload Conveyor Video File", 
+                file_types=[".mp4", ".mpeg", ".mpg", ".avi", ".mov"], 
+                visible=False
+            )
 
             
             
