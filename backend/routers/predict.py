@@ -7,7 +7,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 
 from backend.config import IMAGE_EXTS, MAX_UPLOAD_BYTES, UPLOAD_DIR, VIDEO_EXTS
-from backend.inference import run_inference, run_video_inference
+from backend.inference import run_inference, run_video_inference,get_class_names
 from backend.models.database import get_conn
 from backend.schemas.prediction import PredictionResponse
 from backend.security import require_api_key
@@ -104,12 +104,5 @@ def predict(
 def get_classes(_: str = Depends(require_api_key)) -> dict[str, list[str]]:
     """Return the list of supported waste categories."""
     return {
-        "classes": [
-            "paper",
-            "plastic",
-            "metal",
-            "glass",
-            "organic",
-            "other",
-        ]
+        "classes": get_class_names()
     }
