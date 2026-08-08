@@ -38,10 +38,22 @@ def get_resource_path(relative_path):
 
 
 
+def load_config():
+    config_path = get_resource_path("config.yaml") 
+    if not os.path.exists(config_path):
+        config_path = "config.yaml" 
+        
+    with open(config_path, "r", encoding="utf-8") as f:
+        return yaml.safe_load(f)
+
+
+config = load_config()
+
+
 arduino_log_out=[]
 payload=[]
 
-CONVEYOR_DIRECTION = "DOWNWARD"
+CONVEYOR_DIRECTION = config["conveyor"]["direction"]
 
 
 # Disable Gradio analytics
@@ -55,11 +67,11 @@ try:
    device="cuda" if torch.cuda.is_available() else "cpu"
 except Exception as e:
     print(e)
+
+MODEL_PATH = get_resource_path("create_exe_file/best_abbas.pt")
 DEVICE=device
-MODEL_PATH = get_resource_path("best_abbas.pt")
 
-
-DATA_YAML_PATH =get_resource_path("data.yaml")  # for validating model accuracy on dashboard
+DATA_YAML_PATH =get_resource_path("create_exe_file/data1.yaml")  # for validating model accuracy on dashboard
 
 if not os.path.exists(MODEL_PATH):
     logging.warning(f"⚠️ Model file not found at '{MODEL_PATH}'. Ensure correct path before running detection.")
@@ -89,13 +101,7 @@ logging.info(
 
 
 # set gripper force for each class(0,100N)
-GRIP_FORCE_MAP = {
-    "Glass": 20,    
-    "Paper": 85,    
-    "Plastic": 50,  
-    "Metal": 70,    
-    "Waste": 60     
-}
+GRIP_FORCE_MAP = config["grip_forces"]
 
 
 
@@ -144,16 +150,17 @@ WASTE_VALUES = {
     "Waste": 0.00
 }
 
-BIN_CAPACITIES = {k: 10 for k in TARGET_5_CLASSES}
+n=config["bin_capacities"]
+BIN_CAPACITIES = {k: n for k in TARGET_5_CLASSES}
 
-TRIGGER_LINE_RATIO = 0.50
-TRIGGER_TOLERANCE = 25
-SCALE_FACTOR_MM = 1.5
-GRASPING_ZONE_Y_MM = 600.0
-CONVEYOR_SPEED_MM_S = 150.0
+TRIGGER_LINE_RATIO = config["vision"]["trigger_line_ratio"]
+TRIGGER_TOLERANCE = config["vision"]["trigger_tolerance_px"]
+SCALE_FACTOR_MM = config["vision"]["scale_factor_mm"]
+GRASPING_ZONE_Y_MM = config["conveyor"]["grasping_zone_y_mm"]
+CONVEYOR_SPEED_MM_S = config["conveyor"]["speed_mm_s"]
 
 # For Calculate Availability
-PLANNED_PRODUCTION_TIME = 3600.0  # 3600(Second) == 1H
+PLANNED_PRODUCTION_TIME = config['PLANNED_PRODUCTION_TIME']  # 3600(Second) == 1H
 
 
 
@@ -163,7 +170,7 @@ The shortest possible time for a robot to process and separate
 a piece of waste in seconds (here 0.5 seconds, or the ideal speed
 of 2 pieces of waste per second).
 """
-IDEAL_CYCLE_TIME = 3.0
+IDEAL_CYCLE_TIME = config['IDEAL_CYCLE_TIME']
 
 # Thread synchronization
 state_lock = threading.Lock()
@@ -274,7 +281,7 @@ def calculate_kinematics_and_send(obj, frame, frame_width, frame_height):
 
 
     xw_mm = (cx - (frame_width / 2)) * SCALE_FACTOR_MM # convert pixles to mm
-    zw_mm = -150.0 #mm
+    zw_mm = config['zm'] #mm
 
 
     trigger_y_px = int(frame_height * TRIGGER_LINE_RATIO) # trigger line position on picture(pixle)
@@ -778,7 +785,7 @@ def evaluate_model_benchmark():
     except Exception as e:
         return f"⚠️ Benchmark Error: {str(e)}"
 
-    
+
 def handle_reconnect():
     global arduino
     if arduino and hasattr(arduino, "is_open") and arduino.is_open:
@@ -850,7 +857,6 @@ def resize_with_aspect_ratio(image, target_size=(640, 640)):
     padded_image[top:top + new_h, left:left + new_w] = resized_image
 
     return padded_image
-
 
 
 
@@ -1300,6 +1306,7 @@ with gr.Blocks(title="ECO-SORT AI | Smart Waste Automation") as demo:
                 file_types=[".mp4", ".mpeg", ".mpg", ".avi", ".mov"], 
                 visible=False
             )
+
             
             
             btn_analyze = gr.Button(" Start Analysis", visible=False,elem_classes=["btn-start_to_analyze"])
@@ -1435,15 +1442,4 @@ if __name__ == "__main__":
     theme=gr.themes.Soft(),
     css=custom_css,
     head=custom_head)
-
-
-
-
-
-
-
-
-
-
-
 
