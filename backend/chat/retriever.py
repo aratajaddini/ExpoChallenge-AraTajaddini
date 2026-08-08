@@ -129,10 +129,14 @@ def search(query: str, top_k: int | None = None) -> list[dict[str, Any]]:
     limit = min(top_k or config.KB_TOP_K, len(chunks))
 
     lexical = bm25.scores(_tokenize(query))
-    query_vec = _get_encoder().encode(
-        query,
-        normalize_embeddings=True,
-    ).astype(np.float32)
+    query_vec = (
+        _get_encoder()
+        .encode(
+            query,
+            normalize_embeddings=True,
+        )
+        .astype(np.float32)
+    )
     cosine = vectors @ query_vec
 
     fused = _rrf(lexical, config.KB_RRF_K) + _rrf(cosine, config.KB_RRF_K)

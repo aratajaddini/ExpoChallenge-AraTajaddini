@@ -42,11 +42,11 @@ app.add_middleware(
 )
 
 # API routers first — the static mount below is a catch-all.
-app.include_router(auth.router)         # /auth
-app.include_router(predict.router)      # /predict
-app.include_router(history.router)      # /history
-app.include_router(feedback.router)     # /feedback
-app.include_router(admin_keys.router)   # /admin/keys
+app.include_router(auth.router)  # /auth
+app.include_router(predict.router)  # /predict
+app.include_router(history.router)  # /history
+app.include_router(feedback.router)  # /feedback
+app.include_router(admin_keys.router)  # /admin/keys
 app.include_router(chat_router.router)  # /chat
 
 

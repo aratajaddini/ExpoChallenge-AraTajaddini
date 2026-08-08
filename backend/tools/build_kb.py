@@ -117,7 +117,9 @@ def main() -> None:
 
     for i, c in enumerate(chunks):
         print(f"[{i:3d}] {c.source} :: {c.section} ({len(c.text.split())}w)")
-    print(f"\n{len(chunks)} chunks, max {max(len(c.text.split()) for c in chunks)} words")
+    print(
+        f"\n{len(chunks)} chunks, max {max(len(c.text.split()) for c in chunks)} words"
+    )
 
     if args.dry_run:
         return

@@ -1,4 +1,5 @@
 """Collect user corrections for past predictions."""
+
 from fastapi import APIRouter, Depends, HTTPException
 
 from backend.models.database import get_conn

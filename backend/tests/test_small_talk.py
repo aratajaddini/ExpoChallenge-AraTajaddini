@@ -1,7 +1,5 @@
 """Unit tests for the small_talk canned‑reply module."""
 
-import pytest
-
 from backend.chat.small_talk import _norm, small_talk
 
 

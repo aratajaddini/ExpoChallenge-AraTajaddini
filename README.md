@@ -90,7 +90,7 @@ All documents live under [`backend/docs/kb/`](backend/docs/kb/).
 
 | # | 📄 Document | Description |
 |---|---|---|
-| 01 | [**Overview**](backend/docs/kb/01-overview.md) | Goals, components & high‑level diagram |
+| 01 | [**Overview**](backend/docs/kb/01-overview.md) | Goals, components & high-level diagram |
 | 02 | [**Classes**](backend/docs/kb/02-classes.md) | Specs for the five waste classes |
 | 03 | [**Pipeline**](backend/docs/kb/03-pipeline.md) | Data flow, inference & routing |
 | 04 | [**API**](backend/docs/kb/04-api.md) | REST endpoints, request / response formats |
@@ -116,7 +116,7 @@ All documents live under [`backend/docs/kb/`](backend/docs/kb/).
 | # | 📄 Document | Description |
 |---|---|---|
 | 08 | [**Failure Modes**](backend/docs/kb/08-failure-modes.md) | Known issues & recovery strategies |
-| 09 | [**Security & Keys**](backend/docs/kb/09-security-and-keys.md) | Auth workflow, API‑key handling |
+| 09 | [**Security & Keys**](backend/docs/kb/09-security-and-keys.md) | Auth workflow, API-key handling |
 
 ---
 

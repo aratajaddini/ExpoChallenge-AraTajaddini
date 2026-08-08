@@ -1,8 +1,9 @@
 """Model inference. Independent of FastAPI; model loaded once via lru_cache."""
+
 import io
+from collections.abc import Iterator
 from functools import lru_cache
 from pathlib import Path
-from typing import Iterator
 
 import cv2
 import numpy as np

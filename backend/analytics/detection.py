@@ -1,4 +1,5 @@
 """TACO detector — analytics only. Never called from the delivery path."""
+
 from __future__ import annotations
 
 import io
@@ -118,7 +119,9 @@ def _get_index_map() -> dict[int, str]:
     if unmapped:
         log.warning(
             "detection: %d TACO labels not in TACO_TO_5, forced to %s: %s",
-            len(unmapped), FALLBACK_CLASS, sorted(unmapped),
+            len(unmapped),
+            FALLBACK_CLASS,
+            sorted(unmapped),
         )
     return mapping
 

@@ -1,32 +1,52 @@
-import torch
+"""Validate that the trained model checkpoint loads and exposes sane classes."""
+
+from __future__ import annotations
+
+import os
+import sys
+
 from ultralytics import YOLO
-from pathlib import Path
-from PIL import Image
 
-model_path = Path('weights/best.pt')
-print(f'1. File exists: {model_path.exists()}')
-print(f'2. File size: {model_path.stat().st_size / (1024*1024):.2f} MB')
+from backend.config import MODEL_PATH
 
-try:
-    model = YOLO(str(model_path))
-    names = model.names
-    print(f'3. Number of classes: {len(names)}')
-    print(f'   Class mapping: {names}')
-    
-    required = {'Glass', 'Metal', 'Paper', 'Plastic', 'Waste'}
-    if set(names.values()) == required:
-        print('   ✅ Contract PASS: classes match exactly.')
-    else:
-        print('   ❌ Contract FAIL: expected ' + str(required) + ', got ' + str(set(names.values())))
-    
-    # Test classification vs detection
-    dummy = Image.new('RGB', (224, 224), color='red')
-    results = model(dummy, verbose=False)
-    result = results[0]
-    if hasattr(result, 'probs') and result.probs is not None:
-        print('   ✅ Model type PASS: classification model (has probs).')
-    else:
-        print('   ❌ Model type FAIL: detection model – ask Abbas for classification (-cls).')
-        
-except Exception as e:
-    print(f'❌ Error loading model: {e}')
+
+def _expected_classes() -> set[str] | None:
+    """Read optional expected class names from the EXPECTED_CLASSES env var."""
+    raw = os.getenv("EXPECTED_CLASSES", "").strip()
+    if not raw:
+        return None
+    return {name.strip().lower() for name in raw.split(",") if name.strip()}
+
+
+def validate() -> int:
+    """Check the checkpoint on disk and return a process exit code."""
+    if not MODEL_PATH.is_file():
+        print(f"FAIL: model file not found at {MODEL_PATH}")
+        return 1
+
+    try:
+        model = YOLO(str(MODEL_PATH), task="classify")
+    except Exception as exc:  # noqa: BLE001 - surface any load failure to CI
+        print(f"FAIL: could not load {MODEL_PATH}: {exc}")
+        return 1
+
+    names = getattr(model, "names", None)
+    if not names:
+        print("FAIL: model exposes no class names")
+        return 1
+
+    found = {str(name).lower() for name in dict(names).values()}
+    print(f"OK: loaded {MODEL_PATH.name} with {len(found)} classes")
+    for index, name in sorted(dict(names).items()):
+        print(f"  {index}: {name}")
+
+    expected = _expected_classes()
+    if expected and expected != found:
+        print(f"FAIL: expected {sorted(expected)}, got {sorted(found)}")
+        return 1
+
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(validate())
