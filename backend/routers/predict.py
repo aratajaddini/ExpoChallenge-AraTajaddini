@@ -103,12 +103,5 @@ def predict(
 def get_classes(_: str = Depends(require_api_key)) -> dict[str, list[str]]:
     """Return the list of supported waste categories."""
     return {
-        "classes": [
-            "paper",
-            "plastic",
-            "metal",
-            "glass",
-            "organic",
-            "other",
-        ]
+        "classes": []
     }
