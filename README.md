@@ -1,4 +1,4 @@
-# ♻️ Smart Waste Sorting Robot (ECO-SORT AI / TraceSort)
+# ♻️ Smart Waste Sorting Robot (TRACE-SORT-AI / TraceSort)
 
 [![Python](https://img.shields.io/badge/Python-3.11-blue.svg)](https://www.python.org/)
 [![YOLO](https://img.shields.io/badge/AI_Model-YOLO11n-green.svg)](https://github.com/ultralytics/ultralytics)
@@ -472,6 +472,16 @@ All documents live under [`backend/docs/kb/`](backend/docs/kb/) and are what the
 
 ---
 
+
+
+## 📬 Contact & Team
+
+For inquiries, collaboration, or feedback regarding **EcoTrace AI / TraceSort**:
+
+* **Project Lead:** Reza Esmaeili Mood — [esmaeilireza1994@gmail.com](mailto:esmaeilireza1994@gmail.com)
+* **GitHub:** [https://github.com/esmaeilireza](https://github.com/esmaeilireza)
+  
+---
 ## 📄 License
 
 See [LICENSE](LICENSE) for details.
