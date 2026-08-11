@@ -6,7 +6,7 @@ model = YOLO("yolo11n.pt")
 
 results = model.train(
     data="/content/taco_dataset/data.yaml",
-    epochs=200,             
+    epochs=100,             
     imgsz=640,                
     batch=16,                
     device=0,                 
