@@ -689,7 +689,9 @@ def resize_with_aspect_ratio(image, target_size=(640, 640)):
 
 
 def analyze_uploaded_video(video_file):
-    video_path = video_file.name if hasattr(video_file, 'name') else video_file
+    # gr.Video passes the file path directly as a string
+    video_path = video_file if isinstance(video_file, str) else str(video_file)
+    
     # idle statuses
     idle_html = '<div class="metric-status status-idle">— Status: Idle</div>'
     if not video_path:
@@ -764,14 +766,14 @@ def toggle_source(mode: str) -> tuple:
     """Toggle visibility between video-file and webcam inputs."""
     if mode.strip() == "Video File":
         return (
-            gr.update(visible=True),   # video_input
             gr.update(visible=False),  # webcam
-            gr.update(visible=True),   # start button
+            gr.update(visible=True),   # video_row
+            gr.update(visible=True),  # start button (auto-starts on upload)
         )
     return (
-        gr.update(visible=False),      # video_input
         gr.update(visible=True),       # webcam
-        gr.update(visible=False),      # start button
+        gr.update(visible=False),      # video_row
+        gr.update(visible=False),       # start button
     )
 
 
@@ -859,7 +861,7 @@ body {
     border-radius: var(--radius-md);
     padding: 10px 16px;
     color: var(--text-primary);
-    width: 300px;
+    width: 250px;
 }
 
 /* Metric Cards */
@@ -959,7 +961,7 @@ body {
 /* Explicit badge – no pseudo-element duplication */
 #main_viz .live-badge {
     position: absolute;
-    top: 13px;
+    top: 35px;
     right: 15px;
     z-index: 4;
     padding: 4px 8px;
@@ -970,7 +972,7 @@ body {
     font-family: ui-monospace, Consolas, monospace;
     font-size: 9px;
     font-weight: 800;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.08em; 
     pointer-events: none;
 }
 
@@ -1533,17 +1535,29 @@ with gr.Blocks() as demo:
                     visible=True,
                     elem_classes="modern-image"
                 )
-                video_input = gr.File(
-                    label="Upload Video",
-                    show_label=False,
-                    file_types=[".mp4", ".avi", ".mov", ".mkv"],
-                    visible=False
-                )
+                
+                with gr.Row(visible=False) as video_row:
+                    video_input = gr.File(
+                        label="Source Video",
+                        file_types=[".mp4", ".mpeg", ".mpg", ".avi", ".mov"],
+                        interactive=True,
+                        height=360,
+                        elem_classes="source-video",
+                    )
+                    processed_view = gr.Image(
+                        label="AI Detection Output",
+                        type="numpy",
+                        height=360,
+                        interactive=False,
+                    )
+                    
+                    
                 # Controls inside the card – with custom row class
                 with gr.Row(elem_classes="control-row"):
-                    start_btn = gr.Button("Start Processing", elem_classes="modern-btn", variant="primary")
+                    
+                    start_btn = gr.Button("Start Processing", elem_classes="modern-btn", variant="primary",visible=False)
                     benchmark_btn = gr.Button("Run Benchmark", elem_classes="modern-btn")
-                    reconnect_btn = gr.Button("Reconnect Arduino", elem_classes="modern-btn")
+                    reconnect_btn = gr.Button("Reset Arduino", elem_classes="modern-btn")
         
         # Right Column - Metrics
         with gr.Column(
@@ -1688,24 +1702,27 @@ with gr.Blocks() as demo:
         conf_status,           # 12
         oee_status             # 13
     ]
+    
+    video_outputs = outputs.copy()
+    video_outputs[0] = processed_view
 
     # Events
-    start_btn.click(
+    webcam.stream(
         fn=process_single_frame,
         inputs=[webcam],
-        outputs=outputs
+        outputs=outputs,queue=True
     )
 
-    video_input.change(
+    start_btn.click(
         fn=analyze_uploaded_video,
         inputs=[video_input],
-        outputs=outputs
+        outputs=video_outputs
     )
 
     source_radio.change(
         fn=toggle_source,
         inputs=[source_radio],
-        outputs=[video_input, webcam, start_btn]
+        outputs=[webcam, video_row, start_btn]
     )
 
     estop_btn.click(
