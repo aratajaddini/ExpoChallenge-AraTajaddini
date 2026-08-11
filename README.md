@@ -476,7 +476,7 @@ All documents live under [`backend/docs/kb/`](backend/docs/kb/) and are what the
 
 ## 📬 Contact & Team
 
-For inquiries, collaboration, or feedback regarding **EcoTrace AI / TraceSort**:
+For inquiries, collaboration, or feedback regarding **Trace-Sort AI**:
 
 * **Project Lead:** Reza Esmaeili Mood — [esmaeilireza1994@gmail.com](mailto:esmaeilireza1994@gmail.com)
 * **GitHub:** [https://github.com/esmaeilireza](https://github.com/esmaeilireza)
