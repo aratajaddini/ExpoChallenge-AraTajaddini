@@ -1,9 +1,27 @@
 import serial
 import serial.tools.list_ports
 import time
+import yaml
+import os
+import sys
 
 
-def connect(default_port='COM3', baudrate=9600):
+
+def load_config():
+    config_path = get_resource_path("config.yaml")
+    if not os.path.exists(config_path):
+        config_path = "config.yaml" 
+        
+    with open(config_path, "r", encoding="utf-8") as f:
+        return yaml.safe_load(f)
+
+config = load_config()
+
+DEFAULT_PORT = config["hardware"]["default_port"]
+BAUDRATE = config["hardware"]["baudrate"]
+
+
+def connect(default_port=DEFAULT_PORT, baudrate=BAUDRATE):
    
     arduino = None
     status_msg = ""
