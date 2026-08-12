@@ -1,0 +1,23 @@
+names:
+  0: Aluminium foil
+  1: Bottle cap
+  2: Bottle
+  3: Broken glass
+  4: Can
+  5: Carton
+  6: Cigarette
+  7: Cup
+  8: Lid
+  9: Other litter
+  10: Other plastic
+  11: Paper
+  12: Plastic bag - wrapper
+  13: Plastic container
+  14: Pop tab
+  15: Straw
+  16: Styrofoam piece
+  17: Unlabeled litter
+nc: 18
+path: c:\Users\hp\Desktop\PT\AI\innoverse\Smart_Waste_Sorting_Robot\taco_yolo_18class
+train: images/train
+val: images/train
