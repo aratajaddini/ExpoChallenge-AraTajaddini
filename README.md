@@ -11,7 +11,7 @@
 
 Developed for the **Innoverse Competition** by Reza Esmaeili Mood (Lead), Abbas Lotfi (AI Training), Ara Tajaddini (Documentation), and Sina Niknejad (Support).
 
-**Repository:** [github.com/aratajaddini/ExpoChallenge-RezaEsmaeiliMood](https://github.com/aratajaddini/ExpoChallenge-AraTajaddini)
+**Repository:** [https://github.com/aratajaddini/ExpoChallenge-AraTajaddini](https://github.com/aratajaddini/ExpoChallenge-AraTajaddini)
 
 ---
 
