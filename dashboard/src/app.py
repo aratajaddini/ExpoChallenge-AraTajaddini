@@ -73,7 +73,7 @@ except Exception:
     logging.exception("Device detection failed; falling back to CPU")
 
 
-MODEL_PATH = get_resource_path("best_abbas.pt")
+MODEL_PATH = get_resource_path("../model-weights/best_abbas.pt")
 DEVICE = device
 
 DATA_YAML_PATH = get_resource_path("data.yaml")
