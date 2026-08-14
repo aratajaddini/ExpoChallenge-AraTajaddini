@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, "add-*"]
+    branches: [main]
   pull_request:
     branches: [main]
 
@@ -48,7 +48,7 @@ jobs:
       - name: Install linting tools
         run: |
           python -m pip install --upgrade pip
-          pip install ruff==0.8.4 mypy==1.13.0 "bandit[toml]==1.8.0"
+          pip install ruff==0.8.4 mypy==1.13.0 bandit==1.8.0
 
       - name: Ruff (blocking — real errors only)
         run: ruff check --select E9,F63,F7,F82 backend/
@@ -63,4 +63,4 @@ jobs:
 
       - name: Bandit
         continue-on-error: true
-        run: bandit -r backend/ -c pyproject.toml
+        run: bandit -r backend/
