@@ -116,7 +116,7 @@ The API pipeline answers *"what is the dominant class in this image?"*, not *"wh
 ## 🗂️ Repository Layout
 
 ```text
-ExpoChallenge-RezaEsmaeiliMood/
+ExpoChallenge-AraTajaddini/
 ├── backend/                # PART 1 — FastAPI service: prediction API, auth, RAG chat, admin
 │   ├── chat/                 # Hybrid retriever (BM25 + embeddings) + small-talk handling
 │   ├── routers/               # /predict, /auth, /history, /feedback, /admin/keys
@@ -157,8 +157,8 @@ ExpoChallenge-RezaEsmaeiliMood/
 Both Part 1 and Part 2 live in the same repository — clone it once, then follow whichever part(s) you need below.
 
 ```bash
-git clone https://github.com/aratajaddini/ExpoChallenge-RezaEsmaeiliMood.git
-cd ExpoChallenge-RezaEsmaeiliMood
+git clone https://github.com/aratajaddini/ExpoChallenge-AraTajaddini.git
+cd ExpoChallenge-AraTajaddini
 ```
 
 ---
